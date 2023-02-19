@@ -63,12 +63,12 @@ func (e *Entity) SetVal(val any) {
 	e.val = val
 }
 
-func NewConcurrentDict() *ConcurrentDict {
+func NewConcurrentDict(size int) *ConcurrentDict {
 	return &ConcurrentDict{
-		bucketCount: InitBucketCount,
-		buckets:     make([]*LinkedList, InitBucketCount),
+		bucketCount: uint64(size/MaxListLength + 1),
+		buckets:     make([]*LinkedList, uint64(size/MaxListLength+1)),
 		size:        0,
-		cap:         InitBucketCount * MaxListLength,
+		cap:         uint64(size/MaxListLength+1) * MaxListLength,
 		index:       0,
 		hash:        hashmap[SimpleHash],
 	}

@@ -1,8 +1,11 @@
 package db
 
 import (
+	"mygodis/clientc"
 	"mygodis/datadriver/dict"
 	"mygodis/resp"
+	errorsresp "mygodis/resp/error"
+	"strings"
 )
 
 const (
@@ -30,9 +33,9 @@ type UndoFunc func(db *DataBaseImpl, args [][]byte) []CmdLine
 
 func newDB() *DataBaseImpl {
 	db := &DataBaseImpl{
-		data:       dict.MakeConcurrent(dataDictSize),
-		ttlMap:     dict.MakeConcurrent(ttlDictSize),
-		versionMap: dict.MakeConcurrent(dataDictSize),
+		data:       dict.NewConcurrentDict(dataDictSize),
+		ttlMap:     dict.NewConcurrentDict(ttlDictSize),
+		versionMap: dict.NewConcurrentDict(dataDictSize),
 		//locker:     lock.Make(lockerSize),
 		addAof: func(line CmdLine) {},
 	}
@@ -47,4 +50,31 @@ func newBasicDB() *DataBaseImpl {
 		addAof: func(line CmdLine) {},
 	}
 	return db
+}
+func (dbi *DataBaseImpl) Exec(c clientc.Connection, cmd [][]byte) (reply resp.Reply) {
+	s := strings.ToLower(string(cmd[0]))
+	switch s {
+	case "multi": //开启事务
+		if len(cmd) != 1 {
+			return errorsresp.MakeArgNumErrReply(s)
+		}
+	case "discard": //取消事务
+		if len(cmd) != 1 {
+			return errorsresp.MakeArgNumErrReply(s)
+		}
+	case "exec": //执行事务
+		if len(cmd) != 1 {
+			return errorsresp.MakeArgNumErrReply(s)
+		}
+	case "watch": //监视key
+		if len(cmd) < 2 {
+			return errorsresp.MakeArgNumErrReply(s)
+		}
+	}
+	if c != nil && c.InMultiState() {
+		//TODO:事务
+	}
+
+	return
+
 }
