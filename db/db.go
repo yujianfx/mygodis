@@ -7,7 +7,7 @@ import (
 )
 
 type DataEntity struct {
-	Data interface{}
+	Data any
 }
 type KeyEventCallback func(dbIndex int, key string, entity *DataEntity)
 type DB interface {

@@ -1,5 +1,7 @@
 package clientc
 
+import "mygodis/db"
+
 type Connection interface {
 	Write([]byte) (int, error)
 	Close() error
@@ -14,7 +16,7 @@ type Connection interface {
 
 	InMultiState() bool
 	SetMultiState(bool)
-	GetQueuedCmdLine() [][][]byte
+	GetQueuedCmdLine() []db.CmdLine
 	EnqueueCmd([][]byte)
 	ClearQueuedCmds()
 	GetWatching() map[string]uint32

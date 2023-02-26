@@ -1,4 +1,4 @@
-package errorsresp
+package resp
 
 type UnknownErrReply struct{}
 
@@ -68,4 +68,14 @@ func (r *ProtocolErrReply) ToBytes() []byte {
 }
 func (r *ProtocolErrReply) Error() string {
 	return "ERR Protocol error: '" + r.Msg
+}
+
+type MultiErrReply struct {
+}
+
+func (m *MultiErrReply) ToBytes() []byte {
+	return []byte("-ERR MULTI calls can not be nested\r\n")
+}
+func MakeMultiErrReply() *MultiErrReply {
+	return &MultiErrReply{}
 }

@@ -1,22 +1,27 @@
 package db
 
-var cmds = make(map[string]*command)
+var cmdContainer = make(map[string]*Command)
 
 const (
 	Write = iota
 	ReadOnly
 )
 
-type command struct {
+type Command struct {
 	executor ExecFunc
-	prepare  PreFunc // return related keys command
+	prepare  PreFunc // return related keys Command
 	undo     UndoFunc
 	arity    int // allow number of args, arity < 0 means len(args) >= -arity
 	flags    int
 }
 
+func GetCommand(line CmdLine) (*Command, bool) {
+	c, ok := cmdContainer[string(line[0])]
+	return c, ok
+
+}
 func RegisterCommand(name string, executor ExecFunc, prepare PreFunc, rollback UndoFunc, arity int, flags int) {
-	cmds[name] = &command{
+	cmdContainer[name] = &Command{
 		executor: executor,
 		prepare:  prepare,
 		undo:     rollback,
@@ -25,7 +30,7 @@ func RegisterCommand(name string, executor ExecFunc, prepare PreFunc, rollback U
 	}
 }
 func isReadOnly(name string) bool {
-	cmd := cmds[name]
+	cmd := cmdContainer[name]
 	if cmd == nil {
 		return false
 	}

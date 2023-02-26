@@ -288,3 +288,5 @@ func (cd *ConcurrentDict) Clear() {
 		cd.buckets[i] = nil
 	}
 }
+
+//todo rehash method
