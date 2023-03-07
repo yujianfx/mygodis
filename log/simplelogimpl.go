@@ -12,10 +12,10 @@ import (
 )
 
 type Settings struct {
-	path       string `yaml:"path"`
-	name       string `yaml:"name"`
-	ext        string `yaml:"ext"`
-	timeFormat string `yaml:"time-format"`
+	Path       string `yaml:"path"`
+	Name       string `yaml:"name"`
+	Ext        string `yaml:"ext"`
+	TimeFormat string `yaml:"time-format"`
 }
 
 var (
@@ -45,11 +45,11 @@ func init() {
 }
 func Setup(settings *Settings) {
 	var err error
-	dir := settings.Path()
+	dir := settings.Path
 	fileName := fmt.Sprintf("%s-%s.%s",
-		settings.Name(),
-		time.Now().Format(settings.TimeFormat()),
-		settings.Ext())
+		settings.Name,
+		time.Now().Format(settings.TimeFormat),
+		settings.Ext)
 
 	logFile, err = mustOpen(fileName, dir)
 	if err != nil {
@@ -87,7 +87,7 @@ func setPrefix(level logLevel) {
 }
 
 // Debug prints debug log
-func Debug(v ...interface{}) {
+func Debug(v ...any) {
 	mu.Lock()
 	defer mu.Unlock()
 	setPrefix(DEBUG)
@@ -95,7 +95,7 @@ func Debug(v ...interface{}) {
 }
 
 // Info prints normal log
-func Info(v ...interface{}) {
+func Info(v ...any) {
 	mu.Lock()
 	defer mu.Unlock()
 	setPrefix(INFO)
@@ -103,7 +103,7 @@ func Info(v ...interface{}) {
 }
 
 // Warn prints warning log
-func Warn(v ...interface{}) {
+func Warn(v ...any) {
 	mu.Lock()
 	defer mu.Unlock()
 	setPrefix(WARNING)
@@ -111,14 +111,14 @@ func Warn(v ...interface{}) {
 }
 
 // Error prints error log
-func Error(v ...interface{}) {
+func Error(v ...any) {
 	mu.Lock()
 	defer mu.Unlock()
 	setPrefix(ERROR)
 	loggerImpl.Println(v...)
 }
 
-func Errorf(format string, v ...interface{}) {
+func Errorf(format string, v ...any) {
 	mu.Lock()
 	defer mu.Unlock()
 	setPrefix(ERROR)
@@ -126,40 +126,9 @@ func Errorf(format string, v ...interface{}) {
 }
 
 // Fatal prints error log then stop the program
-func Fatal(v ...interface{}) {
+func Fatal(v ...any) {
 	mu.Lock()
 	defer mu.Unlock()
 	setPrefix(FATAL)
 	loggerImpl.Fatalln(v...)
-}
-func (s *Settings) Path() string {
-	return s.path
-}
-
-func (s *Settings) SetPath(path string) {
-	s.path = path
-}
-
-func (s *Settings) Name() string {
-	return s.name
-}
-
-func (s *Settings) SetName(name string) {
-	s.name = name
-}
-
-func (s *Settings) Ext() string {
-	return s.ext
-}
-
-func (s *Settings) SetExt(ext string) {
-	s.ext = ext
-}
-
-func (s *Settings) TimeFormat() string {
-	return s.timeFormat
-}
-
-func (s *Settings) SetTimeFormat(timeFormat string) {
-	s.timeFormat = timeFormat
 }

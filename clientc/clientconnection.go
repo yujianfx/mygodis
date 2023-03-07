@@ -1,6 +1,7 @@
 package clientc
 
 import (
+	cm "mygodis/common"
 	"mygodis/lib/sync/wait"
 	logger "mygodis/log"
 	"net"
@@ -33,7 +34,7 @@ type ClientConnection struct {
 	password string
 
 	// queued commands for `multi`
-	queue    [][][]byte
+	queue    []cm.CmdLine
 	watching map[string]uint32
 	txErrors []error
 
@@ -47,8 +48,8 @@ var connPool = sync.Pool{
 	},
 }
 
-func (c *ClientConnection) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
+func (c *ClientConnection) RemoteAddr() string {
+	return c.conn.RemoteAddr().String()
 }
 func (c *ClientConnection) Close() error {
 	c.wt.WaitWithTimeout(10 * time.Second)
@@ -128,7 +129,7 @@ func (c *ClientConnection) SetMultiState(b bool) {
 	c.flags |= flagMulti
 }
 
-func (c *ClientConnection) GetQueuedCmdLine() [][][]byte {
+func (c *ClientConnection) GetQueuedCmdLine() []cm.CmdLine {
 	return c.queue
 }
 

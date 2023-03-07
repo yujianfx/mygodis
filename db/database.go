@@ -1,7 +1,8 @@
 package db
 
 import (
-	"mygodis/clientc"
+	cm "mygodis/common"
+	"mygodis/common/commoninterface"
 	"mygodis/datadriver/dict"
 	"mygodis/lib/delay"
 	"mygodis/lib/sync/lockermap"
@@ -21,24 +22,23 @@ type DataBaseImpl struct {
 	data           dict.Dict
 	ttlMap         dict.Dict
 	versionMap     dict.Dict
-	addAof         func(CmdLine)
-	insertCallback KeyEventCallback
-	deleteCallback KeyEventCallback
+	addAof         func(cm.CmdLine)
+	insertCallback commoninterface.KeyEventCallback
+	deleteCallback commoninterface.KeyEventCallback
 	locker         *lockermap.LockerMap
 }
 
 type ExecFunc func(db *DataBaseImpl, args [][]byte) resp.Reply
 type PreFunc func(args [][]byte) ([]string, []string)
-type CmdLine = [][]byte
-type UndoFunc func(db *DataBaseImpl, args [][]byte) []CmdLine
+type UndoFunc func(db *DataBaseImpl, args [][]byte) []cm.CmdLine
 
-func newDB() *DataBaseImpl {
+func NewDB() *DataBaseImpl {
 	db := &DataBaseImpl{
 		data:       dict.NewConcurrentDict(dataDictSize),
 		ttlMap:     dict.NewConcurrentDict(ttlDictSize),
 		versionMap: dict.NewConcurrentDict(dataDictSize),
 		locker:     lockermap.NewLockerMap(lockerSize),
-		addAof:     func(line CmdLine) {},
+		addAof:     func(line cm.CmdLine) {},
 	}
 	return db
 }
@@ -48,11 +48,11 @@ func newBasicDB() *DataBaseImpl {
 		ttlMap:     dict.NewSimpleDict(ttlDictSize),
 		versionMap: dict.NewSimpleDict(dataDictSize),
 		//locker:     lock.Make(lockerSize),
-		addAof: func(line CmdLine) {},
+		addAof: func(line cm.CmdLine) {},
 	}
 	return db
 }
-func (dbi *DataBaseImpl) Exec(c clientc.Connection, cmd [][]byte) (reply resp.Reply) {
+func (dbi *DataBaseImpl) Exec(c commoninterface.Connection, cmd [][]byte) (reply resp.Reply) {
 	s := strings.ToLower(string(cmd[0]))
 	switch s {
 	case "multi": //开启事务
@@ -80,26 +80,26 @@ func (dbi *DataBaseImpl) Exec(c clientc.Connection, cmd [][]byte) (reply resp.Re
 	//TODO:执行命令
 	return
 }
-func (dbi *DataBaseImpl) GetEntity(key string) (dataEntity *DataEntity, ok bool) {
+func (dbi *DataBaseImpl) GetEntity(key string) (dataEntity *commoninterface.DataEntity, ok bool) {
 	val, exists := dbi.data.Get(key) //hash
 	if !exists {
 		return nil, false
 	}
-	dataEntity, ok = val.(*DataEntity)
+	dataEntity, ok = val.(*commoninterface.DataEntity)
 	return
 }
-func (dbi *DataBaseImpl) SetEntity(key string, dataEntity *DataEntity) int {
+func (dbi *DataBaseImpl) SetEntity(key string, dataEntity *commoninterface.DataEntity) int {
 	result := dbi.data.Put(key, dataEntity)
 	if insertCb := dbi.insertCallback; result > 0 && insertCb != nil {
 		insertCb(dbi.index, key, dataEntity)
 	}
 	return result
 }
-func (dbi *DataBaseImpl) PutExists(key string, dataEntity *DataEntity) int {
+func (dbi *DataBaseImpl) PutExists(key string, dataEntity *commoninterface.DataEntity) int {
 	exists := dbi.data.PutIfExists(key, dataEntity)
 	return exists
 }
-func (dbi *DataBaseImpl) PutAbsent(key string, dataEntity *DataEntity) int {
+func (dbi *DataBaseImpl) PutAbsent(key string, dataEntity *commoninterface.DataEntity) int {
 	r := dbi.data.PutIfAbsent(key, dataEntity)
 	if r > 0 {
 		if insertCb := dbi.insertCallback; insertCb != nil {
@@ -114,7 +114,7 @@ func (dbi *DataBaseImpl) DeleteEntity(key string) int {
 	dbi.ttlMap.Remove(key)
 
 	if deleteCb := dbi.deleteCallback; r > 0 && deleteCb != nil {
-		deleteCb(dbi.index, key, val.(*DataEntity))
+		deleteCb(dbi.index, key, val.(*commoninterface.DataEntity))
 	}
 	return r
 }
@@ -126,7 +126,7 @@ func (dbi *DataBaseImpl) Remove(key string) int {
 	delay.Cancel(taskKey)
 	if deleteCb := dbi.deleteCallback; deleteCb != nil {
 		if result > 0 {
-			deleteCb(dbi.index, key, val.(*DataEntity))
+			deleteCb(dbi.index, key, val.(*commoninterface.DataEntity))
 		}
 	}
 	return result
@@ -191,9 +191,9 @@ func (dbi *DataBaseImpl) SetVersion(key ...string) {
 		}
 	}
 }
-func (dbi *DataBaseImpl) ForEach(f func(key string, entity *DataEntity, expireTime time.Time) bool) {
+func (dbi *DataBaseImpl) ForEach(f func(key string, entity *commoninterface.DataEntity, expireTime time.Time) bool) {
 	dbi.data.ForEach(func(key string, val any) bool {
-		entity := val.(*DataEntity)
+		entity := val.(*commoninterface.DataEntity)
 		expireTime, _ := dbi.ttlMap.Get(key)
 		return f(key, entity, expireTime.(time.Time))
 	})
@@ -204,7 +204,7 @@ func (dbi *DataBaseImpl) RWLocks(writeKeys []string, readKeys []string) {
 func (dbi *DataBaseImpl) RWUnLocks(writeKeys []string, readKeys []string) {
 	dbi.locker.URWLockBatch(writeKeys, readKeys)
 }
-func (dbi *DataBaseImpl) ExecNormal(line CmdLine) resp.Reply {
+func (dbi *DataBaseImpl) ExecNormal(line cm.CmdLine) resp.Reply {
 	command, b := GetCommand(line)
 	reply := validateCommand(command, b, line)
 	if reply != nil {
@@ -212,7 +212,7 @@ func (dbi *DataBaseImpl) ExecNormal(line CmdLine) resp.Reply {
 	}
 	return command.executor(dbi, line)
 }
-func (dbi *DataBaseImpl) ExecWithLock(line CmdLine) resp.Reply {
+func (dbi *DataBaseImpl) ExecWithLock(line cm.CmdLine) resp.Reply {
 	command, b := GetCommand(line)
 	reply := validateCommand(command, b, line)
 	if reply != nil {
@@ -234,7 +234,7 @@ func validateArity(arity int, cmdArgs [][]byte) bool {
 func expireTaskKey(key string) string {
 	return "expire:" + key
 }
-func validateCommand(command *Command, b bool, line CmdLine) resp.Reply {
+func validateCommand(command *Command, b bool, line cm.CmdLine) resp.Reply {
 	if !b {
 		return resp.MakeErrReply("ERR unknown command " + string(line[0]))
 	}

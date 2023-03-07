@@ -1,6 +1,6 @@
-package clientc
+package commoninterface
 
-import "mygodis/db"
+import cm "mygodis/common"
 
 type Connection interface {
 	Write([]byte) (int, error)
@@ -16,7 +16,7 @@ type Connection interface {
 
 	InMultiState() bool
 	SetMultiState(bool)
-	GetQueuedCmdLine() []db.CmdLine
+	GetQueuedCmdLine() []cm.CmdLine
 	EnqueueCmd([][]byte)
 	ClearQueuedCmds()
 	GetWatching() map[string]uint32

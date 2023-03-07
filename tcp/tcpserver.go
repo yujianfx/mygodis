@@ -38,7 +38,11 @@ func ListenAndServeWithSignal(config *Config, handler Handler) error {
 }
 func listenAndServe(listener net.Listener, handler Handler, closeC <-chan struct{}) {
 	errorC := make(chan error)
-	defer close(errorC)
+	defer func() {
+		close(errorC)
+		_ = listener.Close()
+		_ = handler.Close()
+	}()
 	go func() {
 		select {
 		case <-closeC:
@@ -48,8 +52,7 @@ func listenAndServe(listener net.Listener, handler Handler, closeC <-chan struct
 		}
 		logger.Info("server closed")
 	}()
-	_ = listener.Close()
-	_ = handler.Close()
+
 	ctx := context.Background()
 	wt := sync.WaitGroup{}
 	for {

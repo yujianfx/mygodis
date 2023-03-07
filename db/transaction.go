@@ -1,12 +1,13 @@
 package db
 
 import (
-	"mygodis/clientc"
+	cm "mygodis/common"
+	"mygodis/common/commoninterface"
 	"mygodis/resp"
 	"strings"
 )
 
-func StartMulti(c clientc.Connection) (reply resp.Reply) {
+func StartMulti(c commoninterface.Connection) (reply resp.Reply) {
 	if c.InMultiState() {
 		return resp.MakeMultiErrReply()
 	}
@@ -14,7 +15,7 @@ func StartMulti(c clientc.Connection) (reply resp.Reply) {
 	return resp.MakeOkReply()
 }
 
-func DiscardMulti(c clientc.Connection) resp.Reply {
+func DiscardMulti(c commoninterface.Connection) resp.Reply {
 	if !c.InMultiState() {
 		return resp.MakeMultiErrReply()
 	}
@@ -22,7 +23,7 @@ func DiscardMulti(c clientc.Connection) resp.Reply {
 	c.ClearQueuedCmds()
 	return resp.MakeOkReply()
 }
-func Watch(db *DataBaseImpl, c clientc.Connection, cmd [][]byte) (reply resp.Reply) {
+func Watch(db *DataBaseImpl, c commoninterface.Connection, cmd [][]byte) (reply resp.Reply) {
 	if len(cmd) < 2 {
 		return resp.MakeArgNumErrReply("watch")
 	}
@@ -34,7 +35,7 @@ func Watch(db *DataBaseImpl, c clientc.Connection, cmd [][]byte) (reply resp.Rep
 	}
 	return resp.MakeOkReply()
 }
-func watchChanged(db *DataBaseImpl, c clientc.Connection) bool {
+func watchChanged(db *DataBaseImpl, c commoninterface.Connection) bool {
 	watching := c.GetWatching()
 	for key, version := range watching {
 		if v, ok := db.GetVersion(key); ok && v != version {
@@ -43,7 +44,7 @@ func watchChanged(db *DataBaseImpl, c clientc.Connection) bool {
 	}
 	return false
 }
-func EnQueue(c clientc.Connection, cmdLine [][]byte) (reply resp.Reply) {
+func EnQueue(c commoninterface.Connection, cmdLine [][]byte) (reply resp.Reply) {
 	if !c.InMultiState() {
 		return resp.MakeMultiErrReply()
 	}
@@ -62,7 +63,7 @@ func EnQueue(c clientc.Connection, cmdLine [][]byte) (reply resp.Reply) {
 	c.EnqueueCmd(cmdLine)
 	return resp.MakeQueuedReply()
 }
-func execMulti(dbi *DataBaseImpl, c clientc.Connection) resp.Reply {
+func execMulti(dbi *DataBaseImpl, c commoninterface.Connection) resp.Reply {
 	if !c.InMultiState() {
 		return resp.MakeMultiErrReply()
 	}
@@ -75,7 +76,7 @@ func execMulti(dbi *DataBaseImpl, c clientc.Connection) resp.Reply {
 
 }
 
-func ExecMulti(dbi *DataBaseImpl, c clientc.Connection, watching map[string]uint32, cmdLines []CmdLine) resp.Reply {
+func ExecMulti(dbi *DataBaseImpl, c commoninterface.Connection, watching map[string]uint32, cmdLines []cm.CmdLine) resp.Reply {
 	if watchChanged(dbi, c) {
 		return resp.MakeEmptyMultiBulkReply()
 	}
@@ -105,7 +106,7 @@ func ExecMulti(dbi *DataBaseImpl, c clientc.Connection, watching map[string]uint
 	}
 	replies := make([]resp.Reply, 0, len(cmdLines))
 	aborted := false
-	undoCmdLines := make([][]CmdLine, 0, len(cmdLines))
+	undoCmdLines := make([][]cm.CmdLine, 0, len(cmdLines))
 	for _, cmdLine := range cmdLines {
 		undoCmdLines = append(undoCmdLines, GetUndoLogs(dbi, cmdLine))
 		reply := dbi.ExecWithLock(cmdLine) //commit
@@ -129,7 +130,7 @@ func ExecMulti(dbi *DataBaseImpl, c clientc.Connection, watching map[string]uint
 	dbi.SetVersion(wkeys...)
 	return resp.MakeMultiRawReply(replies...)
 }
-func GetUndoLogs(dbi *DataBaseImpl, line CmdLine) []CmdLine {
+func GetUndoLogs(dbi *DataBaseImpl, line cm.CmdLine) []cm.CmdLine {
 	cmdName := strings.ToLower(string(line[0]))
 	cmd, _ := cmdContainer[cmdName]
 	if cmd.undo == nil {

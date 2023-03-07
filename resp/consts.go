@@ -11,19 +11,19 @@ const (
 
 var constMap = map[int]Reply{
 	ok: &OkReply{
-		ok: []byte("+OK\r\n"),
+		ok: []byte("+OK" + CRLF),
 	},
 	pong: &PongReply{
-		pong: []byte("+PONG\r\n"),
+		pong: []byte("+PONG" + CRLF),
 	},
 	nullBulk: &NullBulkReply{
-		nbr: []byte("$-1\r\n"),
+		nbr: []byte("$-1" + CRLF),
 	},
 	emptyMultiBulk: &EmptyMultiBulkReply{
-		emb: []byte("*0\r\n"),
+		emb: []byte("*0" + CRLF),
 	},
 	queued: &QueuedReply{
-		qr: []byte("+QUEUED\r\n"),
+		qr: []byte("+QUEUED" + CRLF),
 	},
 	noReply: &NoReply{
 		nr: []byte(""), // no reply
@@ -34,57 +34,51 @@ type PongReply struct {
 	pong []byte
 }
 
-func (r *PongReply) ToBytes() []byte {
-	return r.pong
-}
-
 type OkReply struct{ ok []byte }
-
-func (r *OkReply) ToBytes() []byte {
-	return r.ok
-}
-
-func MakeOkReply() *OkReply {
-	return constMap[ok].(*OkReply)
-}
-
 type NullBulkReply struct {
 	nbr []byte
 }
+type EmptyMultiBulkReply struct {
+	emb []byte
+}
+type NoReply struct {
+	nr []byte
+}
+type QueuedReply struct {
+	qr []byte
+}
 
-func (r *NullBulkReply) ToBytes() []byte {
-	return r.nbr
+func MakePongReply() *PongReply {
+	return constMap[pong].(*PongReply)
+}
+func MakeOkReply() *OkReply {
+	return constMap[ok].(*OkReply)
 }
 func MakeNullBulkReply() *NullBulkReply {
 	return constMap[nullBulk].(*NullBulkReply)
 }
-
-type EmptyMultiBulkReply struct {
-	emb []byte
-}
-
-func (r *EmptyMultiBulkReply) ToBytes() []byte {
-	return r.emb
-}
 func MakeEmptyMultiBulkReply() *EmptyMultiBulkReply {
 	return constMap[emptyMultiBulk].(*EmptyMultiBulkReply)
 }
-
-type NoReply struct {
-	nr []byte
+func MakeQueuedReply() *QueuedReply {
+	return constMap[queued].(*QueuedReply)
 }
-
 func (r *NoReply) ToBytes() []byte {
 	return r.nr
-}
-
-type QueuedReply struct {
-	qr []byte
 }
 
 func (r *QueuedReply) ToBytes() []byte {
 	return r.qr
 }
-func MakeQueuedReply() *QueuedReply {
-	return constMap[queued].(*QueuedReply)
+func (r *EmptyMultiBulkReply) ToBytes() []byte {
+	return r.emb
+}
+func (r *NullBulkReply) ToBytes() []byte {
+	return r.nbr
+}
+func (r *PongReply) ToBytes() []byte {
+	return r.pong
+}
+func (r *OkReply) ToBytes() []byte {
+	return r.ok
 }

@@ -1,5 +1,7 @@
 package db
 
+import cm "mygodis/common"
+
 var cmdContainer = make(map[string]*Command)
 
 const (
@@ -15,7 +17,7 @@ type Command struct {
 	flags    int
 }
 
-func GetCommand(line CmdLine) (*Command, bool) {
+func GetCommand(line cm.CmdLine) (*Command, bool) {
 	c, ok := cmdContainer[string(line[0])]
 	return c, ok
 

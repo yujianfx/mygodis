@@ -15,7 +15,7 @@ type ConcurrentDict struct {
 }
 
 const (
-	SimpleHash = uint32(0) << iota
+	SimpleHash = uint32(1) << iota
 	MurmurHash
 )
 const (
@@ -85,6 +85,14 @@ func (l *LinkedList) insertHeader(entity *Entity) {
 	if l.head == nil {
 		l.head = node
 		l.tail = node
+		l.size++
+		return
+	}
+	if l.head.nextNode == nil {
+		l.head.nextNode = node
+		node.preNode = l.head
+		l.tail = node
+		l.size++
 		return
 	}
 	node.nextNode = l.head.nextNode

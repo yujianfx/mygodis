@@ -19,6 +19,18 @@ type MultiBulkReply struct {
 type MultiRawReply struct {
 	replies []Reply
 }
+type StatusReply struct {
+	Status string
+}
+
+func MakeStatusReply(status string) *StatusReply {
+	return &StatusReply{
+		Status: status,
+	}
+}
+func (r *StatusReply) ToBytes() []byte {
+	return []byte("+" + r.Status + CRLF)
+}
 
 func (m MultiRawReply) ToBytes() []byte {
 	argLen := len(m.replies)
@@ -44,6 +56,20 @@ func MakeErrReply(status string) *StandardErrReply {
 	return &StandardErrReply{
 		Status: status,
 	}
+}
+
+type IntReply struct {
+	Code int64
+}
+
+func MakeIntReply(code int64) *IntReply {
+	return &IntReply{
+		Code: code,
+	}
+}
+
+func (r *IntReply) ToBytes() []byte {
+	return []byte(":" + strconv.FormatInt(r.Code, 10) + CRLF)
 }
 func MakeMultiBulkReply(args [][]byte) *MultiBulkReply {
 	return &MultiBulkReply{
