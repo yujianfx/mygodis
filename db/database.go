@@ -27,10 +27,9 @@ type DataBaseImpl struct {
 	deleteCallback commoninterface.KeyEventCallback
 	locker         *lockermap.LockerMap
 }
-
-type ExecFunc func(db *DataBaseImpl, args [][]byte) resp.Reply
-type PreFunc func(args [][]byte) ([]string, []string)
-type UndoFunc func(db *DataBaseImpl, args [][]byte) []cm.CmdLine
+type ExecFunc func(db *DataBaseImpl, args cm.CmdLine) resp.Reply
+type PreFunc func(args cm.CmdLine) ([]string, []string)
+type UndoFunc func(db *DataBaseImpl, args cm.CmdLine) []cm.CmdLine
 
 func NewDB() *DataBaseImpl {
 	db := &DataBaseImpl{
@@ -52,7 +51,7 @@ func newBasicDB() *DataBaseImpl {
 	}
 	return db
 }
-func (dbi *DataBaseImpl) Exec(c commoninterface.Connection, cmd [][]byte) (reply resp.Reply) {
+func (dbi *DataBaseImpl) Exec(c commoninterface.Connection, cmd cm.CmdLine) (reply resp.Reply) {
 	s := strings.ToLower(string(cmd[0]))
 	switch s {
 	case "multi": //开启事务
@@ -224,7 +223,7 @@ func (dbi *DataBaseImpl) ExecWithLock(line cm.CmdLine) resp.Reply {
 	dbi.SetVersion(wkeys...)
 	return command.executor(dbi, line)
 }
-func validateArity(arity int, cmdArgs [][]byte) bool {
+func validateArity(arity int, cmdArgs cm.CmdLine) bool {
 	argNum := len(cmdArgs)
 	if arity >= 0 {
 		return argNum == arity

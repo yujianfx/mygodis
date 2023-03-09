@@ -15,15 +15,15 @@ type DB interface {
 	AfterClientClose(connection Connection)
 	Close()
 }
-type DBManage interface {
+type StandaloneDBManage interface {
 	FlushDB(dbIndex int) DB
 	FlushAll()
 }
-type SimpleDBEngine interface {
+type StandaloneDBEngine interface {
 	DB
-	ExecWithLock(connection Connection, args [][]byte) (reply resp.Reply)
+	ExecWithLock(connection Connection, args cm.CmdLine) (reply resp.Reply)
 	ExecMulti(connection Connection, watching map[string]uint32, cmdLines [][]byte) (reply resp.Reply)
-	GetUndoLogs(dbIndex int, cmdLine [][]byte) []cm.CmdLine
+	GetUndoLogs(dbIndex int, cmd cm.CmdLine) []cm.CmdLine
 	ForEach(dbIndex int, cb func(key string, data *DataEntity, expiration *time.Time) bool)
 	RWLocks(dbIndex int, writeKeys []string, readKeys []string)
 	RWUnLocks(dbIndex int, writeKeys []string, readKeys []string)
@@ -32,4 +32,8 @@ type SimpleDBEngine interface {
 	GetExpiration(dbIndex int, key string) *time.Time
 	SetKeyInsertedCallback(cb KeyEventCallback)
 	SetKeyDeletedCallback(cb KeyEventCallback)
+}
+
+type DBInfo interface {
+	GetDbInfo(infoType cm.InfoType) []cm.DBInfo
 }
