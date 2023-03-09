@@ -5,7 +5,7 @@ import (
 	cm "mygodis/common"
 	"mygodis/common/commoninterface"
 	"mygodis/config"
-	"mygodis/db/cmd/systemcmd"
+	//"mygodis/db/cmd"
 	logger "mygodis/log"
 	"mygodis/resp"
 	"os"
@@ -93,45 +93,46 @@ func (d *StandaloneDatabaseManager) Exec(connection commoninterface.Connection, 
 	cmdName := strings.ToLower(string(cmd[0]))
 	switch cmdName {
 	case "ping":
-		return systemcmd.Ping()
+		return Ping()
 	case "auth":
-		return systemcmd.Auth(connection, cmd[1:])
+		return Auth(connection, cmd[1:])
 	case "slaveof":
-		//TODO  return systemcmd.SlaveOf(connection, cmd)
+		//TODO  return systemcd.SlaveOf(connection, cmd)
 	case "select":
-		return systemcmd.Select(connection, cmd[1:])
+
+		return Select(connection, cmd[1:])
 	case "info":
-		return systemcmd.Info(connection, d, cmd)
+		return Info(connection, d, cmd)
 	case "subscribe":
-		//TODO  return systemcmd.Subscribe(connection, cmd)
+		//TODO  return systemcd.Subscribe(connection, cmd)
 	case "unsubscribe":
-		//TODO  return systemcmd.Unsubscribe(connection, cmd)
+		//TODO  return systemcd.Unsubscribe(connection, cmd)
 	case "publish":
-		//TODO  return systemcmd.Publish(connection, cmd)
+		//TODO  return systemcd.Publish(connection, cmd)
 	case "psubscribe":
-		//TODO  return systemcmd.PSubscribe(connection, cmd)
+		//TODO  return systemcd.PSubscribe(connection, cmd)
 	case "punsubscribe":
-		//TODO  return systemcmd.PUnsubscribe(connection, cmd)
+		//TODO  return systemcd.PUnsubscribe(connection, cmd)
 	case "pubsub":
-		//TODO  return systemcmd.PubSub(connection, cmd)
+		//TODO  return systemcd.PubSub(connection, cmd)
 	case "flushdb":
-		return systemcmd.FlushDB(connection, d, cmd)
+		return FlushDB(connection, d, cmd)
 	case "flushall":
-		return systemcmd.FlushAll(connection, d, cmd)
+		return FlushAll(connection, d, cmd)
 	case "rewriteaof":
-		//TODO  return systemcmd.RewriteAOF(connection, cmd)
+		//TODO  return systemcd.RewriteAOF(connection, cmd)
 	case "bgrewriteaof":
-		//TODO  return systemcmd.BgRewriteAOF(connection, cmd)
+		//TODO  return systemcd.BgRewriteAOF(connection, cmd)
 	case "save":
-		//TODO  return systemcmd.Save(connection, cmd)
+		//TODO  return systemcd.Save(connection, cmd)
 	case "bgsave":
-		//TODO  return systemcmd.BgSave(connection, cmd)
+		//TODO  return systemcd.BgSave(connection, cmd)
 	case "copy":
-		//TODO  return systemcmd.Copy(connection, cmd)
+		//TODO  return systemcd.Copy(connection, cmd)
 	case "replconf":
-		//TODO  return systemcmd.ReplConf(connection, cmd)
+		//TODO  return systemcd.ReplConf(connection, cmd)
 	case "psync":
-		//TODO  return systemcmd.PSync(connection, cmd)
+		//TODO  return systemcd.PSync(connection, cmd)
 	}
 	return nil
 }

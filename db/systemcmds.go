@@ -1,4 +1,4 @@
-package systemcmd
+package db
 
 import (
 	"mygodis/common"
