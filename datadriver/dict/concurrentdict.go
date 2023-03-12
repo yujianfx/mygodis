@@ -1,300 +1,413 @@
 package dict
 
 import (
+	"container/list"
 	"math/rand"
 	"mygodis/datadriver/dict/hash"
+	"sync"
 )
-
-type ConcurrentDict struct {
-	buckets     []*LinkedList
-	bucketCount uint64
-	size        uint64 // size of values
-	cap         uint64 // capacity of buckets
-	index       uint64 // index of buckets
-	hash        hash.Hash
-}
 
 const (
 	SimpleHash = uint32(1) << iota
 	MurmurHash
 )
 const (
-	InitBucketCount = 8
-	MaxListLength   = 64 // max length  for rehash
+	MinBucketCount       = 4
+	DefaultExpansionLoad = 0.8
+	DefaultShrinkageLoad = 0.1
+	MaxBucketCount       = 1 << 30
+)
+const (
+	NotRehash = iota << 1
+	ReHashExpansion
+	ReHashShrinkage
 )
 
-var hashmap = map[uint32]hash.Hash{
+var initCapacity = 0
+var hashs = map[uint32]hash.Hash{
 	SimpleHash: &hash.SimpleHash{},
 	MurmurHash: &hash.MurmurHash{},
 }
 
-type LinkedList struct {
-	head *LinkedNode
-	tail *LinkedNode
-	size uint32
-}
-type LinkedNode struct {
-	preNode  *LinkedNode
-	nextNode *LinkedNode
-	entity   *Entity
-}
-type Entity struct {
+type MapEntry struct {
 	key string
 	val any
 }
-
-func newEntity(key string, val any) *Entity {
-	return &Entity{key: key, val: val}
+type ConcurrentDict struct {
+	capacity      int
+	size          int
+	oldTable      []bucket
+	newTable      []bucket
+	expansionLoad float32
+	shrinkageLoad float32
+	rehashing     bool
+	reHashAction  uint16 // 0: not rehashing, 2: rehashing and expansion 4: rehashing and shrinkage
+	rehashIndex   int
+	rehashFactor  float32
+	hash          hash.Hash
+	rwLock        sync.RWMutex
 }
 
-func (e *Entity) Key() string {
-	return e.key
+func (hm *ConcurrentDict) Get(key string) (val any, exists bool) {
+	return hm.get(key)
 }
 
-func (e *Entity) SetKey(key string) {
-	e.key = key
+func (hm *ConcurrentDict) Len() int {
+	return hm.size
 }
 
-func (e *Entity) Val() any {
-	return e.val
-}
-
-func (e *Entity) SetVal(val any) {
-	e.val = val
-}
-
-func NewConcurrentDict(size int) *ConcurrentDict {
-	return &ConcurrentDict{
-		bucketCount: uint64(size/MaxListLength + 1),
-		buckets:     make([]*LinkedList, uint64(size/MaxListLength+1)),
-		size:        0,
-		cap:         uint64(size/MaxListLength+1) * MaxListLength,
-		index:       0,
-		hash:        hashmap[SimpleHash],
-	}
-}
-func (cd *ConcurrentDict) SetHash(hashType uint32) {
-	cd.hash = hashmap[hashType]
-}
-func (l *LinkedList) insertHeader(entity *Entity) {
-	node := &LinkedNode{
-		preNode:  nil,
-		nextNode: nil,
-		entity:   entity,
-	}
-	if l.head == nil {
-		l.head = node
-		l.tail = node
-		l.size++
+func (hm *ConcurrentDict) PutIfAbsent(key string, val any) (result int) {
+	if _, ok := hm.get(key); ok {
+		result = 0
 		return
 	}
-	if l.head.nextNode == nil {
-		l.head.nextNode = node
-		node.preNode = l.head
-		l.tail = node
-		l.size++
-		return
-	}
-	node.nextNode = l.head.nextNode
-	l.head.nextNode.preNode = node
-	l.head.nextNode = node
-	node.preNode = l.head
-	l.size++
-}
-func (l *LinkedList) deleteNodeByKey(key string) (re *Entity) {
-	node := l.head
-	for node != nil {
-		if node.entity.key == key {
-			if node.preNode == nil {
-				re = l.removeHead()
-				return re
-			}
-			if node.nextNode == nil {
-				re = l.removeTail()
-				return re
-			}
-			re = node.entity
-			node.preNode.nextNode = node.nextNode
-			node.nextNode.preNode = node.preNode
-			l.size--
-			return re
-		}
-		node = node.nextNode
-	}
-	return nil
-}
-func (l *LinkedList) removeHead() (re *Entity) {
-	if l.head == nil {
-		return nil
-	}
-	if l.head.nextNode == nil {
-		re = l.head.entity
-		l.head = nil
-		l.tail = nil
-		return re
-	}
-	re = l.head.entity
-	l.head = l.head.nextNode
-	l.head.preNode = nil
-	l.size--
-	return re
-}
-func (l *LinkedList) removeTail() (re *Entity) {
-	if l.tail == nil {
-		return
-	}
-	if l.tail.preNode == nil {
-		re = l.tail.entity
-		l.head = nil
-		l.tail = nil
-		return
-	}
-	re = l.tail.entity
-	l.tail = l.tail.preNode
-	l.tail.nextNode = nil
-	l.size--
-	return re
-}
-func (cd *ConcurrentDict) getBucketIndex(bytes []byte) uint64 {
-	return cd.hash.HashCode(bytes) % cd.bucketCount
-}
-func (cd *ConcurrentDict) Get(key string) (val any, exists bool) {
-	bucketIndex := cd.getBucketIndex([]byte(key))
-	if cd.buckets[bucketIndex] == nil {
-		return nil, false
-	}
-	node := cd.buckets[bucketIndex].head
-	for node != nil {
-		if node.entity.key == key {
-			return node.entity.val, true
-		}
-		node = node.nextNode
-	}
-	return nil, false
-}
-func (cd *ConcurrentDict) Len() int {
-	return int(cd.size)
+	return hm.Put(key, val)
 }
 
-func (cd *ConcurrentDict) put0(key string, val any) {
-	entity := newEntity(key, val)
-	bucketIndex := cd.getBucketIndex([]byte(key))
-	if cd.buckets[bucketIndex] == nil {
-		cd.buckets[bucketIndex] = &LinkedList{}
+func (hm *ConcurrentDict) PutIfExists(key string, val any) (result int) {
+	if _, ok := hm.get(key); ok {
+		return hm.Put(key, val)
 	}
-	cd.buckets[bucketIndex].insertHeader(entity)
-}
-func (cd *ConcurrentDict) Put(key string, val any) (result int) {
 	result = 0
-	entity := newEntity(key, val)
-	bucketIndex := cd.getBucketIndex([]byte(key))
-	if _, exists := cd.Get(key); !exists {
-		result = 1
-	}
-	if cd.buckets[bucketIndex] == nil {
-		cd.buckets[bucketIndex] = &LinkedList{}
-	}
-	cd.buckets[bucketIndex].insertHeader(entity)
-	return result
+	return
 }
 
-func (cd *ConcurrentDict) PutIfAbsent(key string, val any) (result int) {
-	if _, exist := cd.Get(key); exist {
-		return 0
-	}
-	cd.put0(key, val)
-	return 1
+func (hm *ConcurrentDict) Remove(key string) (val any, result int) {
+	return hm.remove(key)
 }
-
-func (cd *ConcurrentDict) PutIfExists(key string, val any) (result int) {
-	if _, exist := cd.Get(key); !exist {
-		return 0
-	}
-	cd.put0(key, val)
-	return 1
-}
-
-func (cd *ConcurrentDict) Remove(key string) (val any, result int) {
-	bucketIndex := cd.getBucketIndex([]byte(key))
-	if cd.buckets[bucketIndex] == nil {
-		return nil, 0
-	}
-	entity := cd.buckets[bucketIndex].deleteNodeByKey(key)
-	return entity.val, 1
-}
-
-func (cd *ConcurrentDict) ForEach(consumer Consumer) {
-	intn := rand.Intn(int(cd.bucketCount))
-	for i := 0; i < int(cd.bucketCount); i++ {
-		if cd.buckets[intn] != nil {
-			node := cd.buckets[intn].head
-			for node != nil {
-				consumer(node.entity.key, node.entity.val)
-				node = node.nextNode
+func (hm *ConcurrentDict) ForEach(consumer Consumer) {
+	randIndex := rand.Intn(hm.capacity)
+	for i := 0; i < hm.capacity; i++ {
+		index := (randIndex + i) % hm.capacity
+		if hm.rehashing {
+			if index >= hm.rehashIndex {
+				hm.oldTable[index].forEach(consumer)
+			} else {
+				hm.newTable[index].forEach(consumer)
 			}
 		}
-		intn = (intn + 1) % int(cd.bucketCount)
+		hm.oldTable[index].forEach(consumer)
 	}
 }
 
-func (cd *ConcurrentDict) Keys() []string {
-	intn := rand.Intn(int(cd.bucketCount))
-	keys := make([]string, 0)
-	for i := 0; i < int(cd.bucketCount); i++ {
-		if cd.buckets[intn] != nil {
-			node := cd.buckets[intn].head
-			for node != nil {
-				keys = append(keys, node.entity.key)
-				node = node.nextNode
-			}
+func (hm *ConcurrentDict) Keys() []string {
+	keys := make([]string, hm.size)
+	allocFunc := func(key string, val any) bool {
+		keys = append(keys, key)
+		return true
+	}
+	hm.ForEach(allocFunc)
+	return keys
+}
+
+func (hm *ConcurrentDict) RandomKeys(limit int) []string {
+	count := 0
+	keys := make([]string, limit)
+	allocFunc := func(key string, val any) bool {
+		keys = append(keys, key)
+		count++
+		if count >= limit {
+			return false
 		}
-		intn = (intn + 1) % int(cd.bucketCount)
+		return true
+	}
+	hm.ForEach(allocFunc)
+	return keys
+}
+
+func (hm *ConcurrentDict) RandomDistinctKeys(limit int) []string {
+	count := 0
+	keySet := make(map[string]struct{})
+	keys := make([]string, limit)
+	allocFunc := func(key string, val any) bool {
+		//如果key不存在keys中，将其加入到keys中
+		keySet[key] = struct{}{}
+		count++
+		if count >= limit {
+			return false
+		}
+		return true
+	}
+	hm.ForEach(allocFunc)
+	for key := range keySet {
+		keys = append(keys, key)
 	}
 	return keys
 }
 
-func (cd *ConcurrentDict) RandomKeys(limit int) []string {
-	intn := rand.Intn(int(cd.bucketCount))
-	keys := make([]string, 0)
-	for i := 0; i < int(cd.bucketCount); i++ {
-		if cd.buckets[intn] != nil {
-			node := cd.buckets[intn].head
-			for node != nil {
-				keys = append(keys, node.entity.key)
-				node = node.nextNode
-			}
+func (hm *ConcurrentDict) Clear() {
+	hm.rwLock.Lock()
+	defer hm.rwLock.Unlock()
+	hm.oldTable = make([]bucket, hm.capacity)
+	for i := range hm.oldTable {
+		hm.oldTable[i] = new(listBucket)
+	}
+	hm.newTable = nil
+	hm.size = 0
+	hm.rehashing = false
+	hm.rehashIndex = 0
+	hm.rehashFactor = 0
+}
+
+func NewConcurrentDict(capacity int) *ConcurrentDict {
+	if capacity < MinBucketCount {
+		capacity = MinBucketCount
+	}
+	if capacity > MaxBucketCount {
+		capacity = MaxBucketCount
+	}
+	initCapacity = capacity
+	h := &ConcurrentDict{
+		capacity:      capacity,
+		oldTable:      make([]bucket, capacity),
+		expansionLoad: DefaultExpansionLoad,
+		shrinkageLoad: DefaultShrinkageLoad,
+		rehashing:     false,
+		rehashIndex:   0,
+		rehashFactor:  0,
+	}
+	if capacity < MaxBucketCount>>1 { //达到最大容量时，不再分配新的空间
+		h.newTable = make([]bucket, capacity<<1)
+		for i := range h.newTable {
+			h.newTable[i] = new(listBucket)
 		}
-		intn = (intn + 1) % int(cd.bucketCount)
 	}
-	if len(keys) < limit {
-		return keys
+	h.hash = hashs[SimpleHash]
+	for i := range h.oldTable {
+		h.oldTable[i] = new(listBucket)
 	}
-	return keys[:limit]
+	return h
 }
-
-func (cd *ConcurrentDict) RandomDistinctKeys(limit int) []string {
-	intn := rand.Intn(int(cd.bucketCount))
-	keys := make([]string, 0)
-	for i := 0; i < int(cd.bucketCount); i++ {
-		if cd.buckets[intn] != nil {
-			node := cd.buckets[intn].head
-			for node != nil {
-				keys = append(keys, node.entity.key)
-				node = node.nextNode
+func (hm *ConcurrentDict) Put(key string, val any) int {
+	// 如果当前正在进行rehash操作，将元素插入到新哈希表中
+	if hm.rehashing {
+		return hm.addEntry(key, val, hm.newTable)
+	}
+	// 否则将元素插入到旧哈希表中
+	hm.rehashFactor = float32(hm.size) / float32(hm.capacity)
+	if hm.rehashFactor > hm.expansionLoad || hm.rehashFactor < hm.shrinkageLoad {
+		//如果负载因子超过阈值，开始进行rehash操作 并且容量没有达到最大值或初始值
+		if hm.capacity <= MaxBucketCount>>1 && hm.capacity >= initCapacity<<1 {
+			if hm.rehashFactor >= hm.expansionLoad {
+				hm.reHashAction = ReHashExpansion
+			} else {
+				hm.reHashAction = ReHashShrinkage
 			}
+			hm.rehashing = true
+			hm.rehashIndex = 0
+			return hm.addEntry(key, val, hm.newTable)
 		}
-		intn = (intn + 1) % int(cd.bucketCount)
+		return hm.addEntry(key, val, hm.oldTable)
 	}
-	if len(keys) < limit {
-		return keys
+	return hm.addEntry(key, val, hm.oldTable)
+}
+func (hm *ConcurrentDict) get(key string) (any, bool) {
+	if hm.rehashing {
+		hm.rehashMove()
 	}
-	return keys[:limit]
+	hash := hm.hash.HashCode([]byte(key))
+	index := hash % uint64(hm.capacity)
+	oldBucket := hm.oldTable[index]
+	oldget := oldBucket.get(key)
+	if hm.reHashAction == ReHashExpansion {
+		index = hash % uint64(hm.capacity<<1)
+	} else {
+		index = hash % uint64(hm.capacity>>1)
+	}
+	newBucket := hm.newTable[index]
+	newget := newBucket.get(key)
+	if oldget != nil && newget != nil {
+		oldBucket.remove(key)
+		return newget, true
+	}
+
+	if oldget != nil && newget == nil {
+		return oldget, true
+	}
+	return oldget, false
 }
 
-func (cd *ConcurrentDict) Clear() {
-	for i := 0; i < int(cd.bucketCount); i++ {
-		cd.buckets[i] = nil
+func (hm *ConcurrentDict) addEntry(key string, val any, table []bucket) int {
+	// 计算key的哈希值和数组下标
+	hash := hm.hash.HashCode([]byte(key))
+	index := uint64(0)
+	if hm.rehashing {
+		if hm.reHashAction == ReHashExpansion {
+			index = hash % uint64(hm.capacity<<1)
+		} else {
+			if hm.capacity>>1 == 0 {
+			}
+			index = hash % uint64(hm.capacity>>1)
+		}
+	} else {
+		index = hash % uint64(hm.capacity)
+	}
+	entry := new(MapEntry)
+	entry.key = key
+	entry.val = val
+	// 将元素插入到链表头部
+	result := table[index].put(key, val)
+	hm.size++
+	// 如果当前正在进行rehash操作，将元素从旧哈希表移动到新哈希表中
+	if hm.rehashing {
+		hm.rehashMove()
+	}
+	if result {
+		return 1
+	}
+	return 0
+}
+
+type bucket interface {
+	remove(key string) any
+	get(key string) any
+	put(key string, val any) bool
+	forEach(consumer func(key string, val any) bool)
+	keys() []string
+	entries() []*MapEntry
+	clear()
+}
+type listBucket struct {
+	list.List
+}
+
+func (l *listBucket) remove(key string) any {
+	for e := l.List.Front(); e != nil; e = e.Next() {
+		entry := e.Value.(*MapEntry)
+		if entry.key == key {
+			l.Remove(e)
+			return entry.val
+		}
+	}
+	return nil
+}
+
+func (l *listBucket) get(key string) any {
+	for e := l.List.Front(); e != nil; e = e.Next() {
+		entry := e.Value.(*MapEntry)
+		if entry.key == key {
+			return entry.val
+		}
+	}
+	return nil
+}
+
+func (l *listBucket) put(key string, val any) bool {
+	v := &MapEntry{
+		key: key,
+		val: val,
+	}
+	result := l.List.PushFront(v) == nil
+	return !result
+}
+
+func (l *listBucket) forEach(consumer func(key string, val any) bool) {
+	head := l.List
+	for e := head.Front(); e != nil; e = e.Next() {
+		entry := e.Value.(*MapEntry)
+		if !consumer(entry.key, entry.val) {
+			break
+		}
 	}
 }
 
-//todo rehash method
+func (l *listBucket) keys() []string {
+	head := l.List
+	keys := make([]string, 0, head.Len())
+	for e := head.Front(); e != nil; e = e.Next() {
+		entry := e.Value.(*MapEntry)
+		keys = append(keys, entry.key)
+	}
+	return keys
+}
+
+func (l *listBucket) entries() []*MapEntry {
+	head := l.List
+	entries := make([]*MapEntry, 0, head.Len())
+	for e := head.Front(); e != nil; e = e.Next() {
+		entry := e.Value.(*MapEntry)
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+func (l *listBucket) clear() {
+	l.Init()
+}
+func (hm *ConcurrentDict) rehashMove() {
+	// 逐步将元素从旧哈希表移动到新哈希表中
+	for hm.rehashIndex < hm.capacity && hm.oldTable[hm.rehashIndex] == nil {
+		hm.rehashIndex++
+	}
+	if hm.rehashIndex >= hm.capacity {
+		// 所有元素都已经移动完成，将新哈希表替换旧哈希表
+		hm.oldTable = hm.newTable
+		if hm.capacity >= MaxBucketCount || hm.capacity <= MinBucketCount {
+			hm.reHashAction = NotRehash
+			hm.rehashing = false
+			hm.rehashIndex = 0
+			hm.rehashFactor = 1
+			return
+		}
+		newCapacity := 0
+		if hm.reHashAction == ReHashExpansion {
+			newCapacity = hm.capacity << 1
+			hm.rehashFactor *= 0.5
+		} else {
+			newCapacity = hm.capacity >> 1
+			hm.rehashFactor *= 2
+		}
+		hm.newTable = make([]bucket, newCapacity)
+		for i := range hm.newTable {
+			hm.newTable[i] = new(listBucket)
+		}
+		hm.capacity = newCapacity
+		hm.rehashing = false
+		hm.rehashIndex = 0
+		hm.reHashAction = NotRehash
+	} else {
+		// 将节点插入新哈希表
+		oldBucket := hm.oldTable[hm.rehashIndex]
+		oldBucket.forEach(func(key string, val any) bool {
+			hash := hm.hash.HashCode([]byte(key))
+			newIndex := uint64(0)
+			if hm.reHashAction == ReHashExpansion {
+				newIndex = hash % uint64(hm.capacity<<1)
+			} else {
+				newIndex = hash % uint64(hm.capacity>>1)
+			}
+			newBucket := hm.newTable[newIndex]
+			newBucket.put(key, val)
+			return true
+		})
+		hm.rehashIndex++
+	}
+}
+
+func (hm *ConcurrentDict) remove(key string) (any, int) {
+	if hm.rehashing {
+		hm.rehashMove()
+	}
+	hash := hm.hash.HashCode([]byte(key))
+	index := hash % uint64(hm.capacity)
+	bucket := hm.oldTable[index]
+	val := bucket.remove(key)
+	if val != nil {
+		hm.size--
+		return val, 1
+	}
+	if hm.rehashing {
+		if hm.reHashAction == ReHashExpansion {
+			index = hash % uint64(hm.capacity<<1)
+		} else {
+			index = hash % uint64(hm.capacity>>1)
+		}
+		bucket = hm.newTable[index]
+		val = bucket.remove(key)
+		if val != nil {
+			hm.size--
+			return val, 1
+		}
+	}
+	return nil, 0
+}
