@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-var testCount = 64
+var testCount = 5096000
 var dict = NewConcurrentDict(4)
 
 func loadData() {
@@ -63,10 +63,6 @@ func TestConcurrentDict_Remove(t *testing.T) {
 			}
 		}
 	})
-	dict.Put("cao", "cao")
-	dict.Remove("cao")
-	val, _ := dict.Get("cao")
-	fmt.Println("get", val)
 	successCount = 0
 	t.Run("Get", func(t *testing.T) {
 		for i := 0; i < testCount; i++ {
@@ -92,5 +88,11 @@ func TestConcurrentDict_RandomKeys(t *testing.T) {
 	keys := dict.RandomKeys(10)
 	if len(keys) != 10 {
 		t.Errorf("RandomKeys failed, expected %d,but got %d", 10, len(keys))
+	}
+}
+func TestConcurrentDict_GOPut(t *testing.T) {
+	m := make(map[string]interface{})
+	for i := 0; i < testCount; i++ {
+		m[fmt.Sprintf("%d", i)] = i
 	}
 }
