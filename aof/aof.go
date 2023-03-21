@@ -6,6 +6,7 @@ import (
 	"mygodis/clientc"
 	cm "mygodis/common"
 	"mygodis/common/commoninterface"
+	"mygodis/config"
 	logger "mygodis/log"
 	"mygodis/parse"
 	"mygodis/resp"
@@ -49,6 +50,11 @@ type Persister struct {
 	currenDbIndex     int
 	listeners         map[Listener]struct{}
 	cmdBuffer         []cm.CmdLine
+}
+type RewriteContext struct {
+	tmpFile  *os.File
+	fileSize int64
+	dbIndex  int
 }
 
 func NewPersister(db commoninterface.StandaloneDBEngine, filename string, load bool, fsync int8, tmpDBMaker func() commoninterface.StandaloneDBEngine) (*Persister, error) {
@@ -221,4 +227,115 @@ func (persister *Persister) SaveCmd(dbIndex int, cmdLine [][]byte) {
 		return
 	}
 	persister.aofChan <- payload
+}
+func (persister *Persister) NewRewritePersister() *Persister {
+	return &Persister{
+		aofFilename: persister.aofFilename,
+		db:          persister.tmpDBMaker(),
+	}
+}
+func (persister *Persister) RewriteAof() error {
+	rewriteContext, err := persister.StartRewriteAof()
+	if err != nil {
+		return err
+	}
+	err = persister.DoRewriteAof(rewriteContext)
+	if err != nil {
+		return err
+	}
+	persister.FinishedRewriteAof(rewriteContext)
+	return nil
+}
+func (persister *Persister) StartRewriteAof() (rewriteContext *RewriteContext, err error) {
+	persister.lockForPausingAof.Lock()
+	defer persister.lockForPausingAof.Unlock()
+	err = persister.aofFile.Sync()
+	if err != nil {
+		logger.Errorf("aof fsync error: %v", err)
+		return nil, err
+	}
+	aofFileInfo, _ := os.Stat(persister.aofFilename)
+	fileSize := aofFileInfo.Size()
+	temp, err := os.CreateTemp("", "*.aof")
+	if err != nil {
+		logger.Errorf("aof create temp file error: %v", err)
+		return nil, err
+	}
+	rewriteContext = &RewriteContext{
+		tmpFile:  temp,
+		fileSize: fileSize,
+		dbIndex:  persister.currenDbIndex,
+	}
+	return rewriteContext, nil
+}
+func (persister *Persister) FinishedRewriteAof(rewriteContext *RewriteContext) {
+	persister.lockForPausingAof.Lock()
+	defer persister.lockForPausingAof.Unlock()
+	tmpFile := rewriteContext.tmpFile
+	srcAof, err := os.Open(persister.aofFilename)
+	if err != nil {
+		logger.Errorf("aof srcAof file error: %v", err)
+		return
+	}
+	defer func(srcAof *os.File) {
+		err := srcAof.Close()
+		if err != nil {
+			logger.Errorf("aof file close error: %v", err)
+		}
+	}(srcAof)
+	_, err = srcAof.Seek(rewriteContext.fileSize, io.SeekStart)
+	if err != nil {
+		logger.Errorf("aof file seek error: %v", err)
+		return
+	}
+	data := resp.MakeMultiBulkReply(cmdutil.ToCmdLine("SELECT", strconv.Itoa(rewriteContext.dbIndex))).ToBytes()
+	_, err = tmpFile.Write(data)
+	if err != nil {
+		logger.Error("tmp file rewrite failed: " + err.Error())
+		return
+	}
+	_, err = io.Copy(tmpFile, srcAof)
+	if err != nil {
+		logger.Errorf("aof file copy error: %v", err)
+		return
+	}
+	_ = persister.aofFile.Close()
+	_ = os.Rename(tmpFile.Name(), persister.aofFilename)
+	persister.aofFile, err = os.OpenFile(persister.aofFilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		logger.Errorf("aof file open error: %v", err)
+		return
+	}
+	data = resp.MakeMultiBulkReply(cmdutil.ToCmdLine("SELECT", strconv.Itoa(persister.currenDbIndex))).ToBytes()
+	_, err = persister.aofFile.Write(data)
+	if err != nil {
+		panic(err)
+	}
+}
+func (persister *Persister) DoRewriteAof(rewriteContext *RewriteContext) error {
+	tmpFile := rewriteContext.tmpFile
+	rewritePersister := persister.NewRewritePersister()
+	rewritePersister.LoadAof(rewriteContext.fileSize)
+	for i := 0; i < config.Properties.Databases; i++ {
+		data := resp.MakeMultiBulkReply(cmdutil.ToCmdLine("SELECT", strconv.Itoa(i))).ToBytes()
+		_, err := tmpFile.Write(data)
+		if err != nil {
+			logger.Error("tmp file rewrite failed: " + err.Error())
+			return err
+		}
+		rewritePersister.db.ForEach(i, func(key string, data *commoninterface.DataEntity, expiration *time.Time) bool {
+			cmd := EntityToCmd(key, data)
+			if cmd != nil {
+				_, _ = tmpFile.Write(cmd.ToBytes())
+			}
+			if expiration != nil {
+				cmd = ExpireToCmd(key, expiration)
+				if cmd != nil {
+					_, _ = tmpFile.Write(cmd.ToBytes())
+				}
+			}
+			return true
+		})
+	}
+	return nil
 }

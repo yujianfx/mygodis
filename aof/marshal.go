@@ -97,7 +97,7 @@ func zSetToCmd(key string, zSet *sortedset.ZSet) *resp.MultiBulkReply {
 	return resp.MakeMultiBulkReply(args)
 
 }
-func expireToCmd(key string, expiration time.Time) *resp.MultiBulkReply {
+func ExpireToCmd(key string, expiration time.Time) *resp.MultiBulkReply {
 	args := make([][]byte, 3)
 	args[0] = pExpireAtBytesCmd
 	args[1] = []byte(key)

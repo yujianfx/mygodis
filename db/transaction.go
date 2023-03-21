@@ -14,7 +14,6 @@ func StartMulti(c commoninterface.Connection) (reply resp.Reply) {
 	c.SetMultiState(true)
 	return resp.MakeOkReply()
 }
-
 func DiscardMulti(c commoninterface.Connection) resp.Reply {
 	if !c.InMultiState() {
 		return resp.MakeMultiErrReply()
@@ -75,7 +74,6 @@ func execMulti(dbi *DataBaseImpl, c commoninterface.Connection) resp.Reply {
 	return ExecMulti(dbi, c, c.GetWatching(), cmdLines)
 
 }
-
 func ExecMulti(dbi *DataBaseImpl, c commoninterface.Connection, watching map[string]uint32, cmdLines []cm.CmdLine) resp.Reply {
 	if watchChanged(dbi, c) {
 		return resp.MakeEmptyMultiBulkReply()

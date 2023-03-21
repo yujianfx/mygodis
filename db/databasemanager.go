@@ -2,9 +2,12 @@ package db
 
 import (
 	"fmt"
+	"mygodis/aof"
 	cm "mygodis/common"
 	"mygodis/common/commoninterface"
 	"mygodis/config"
+	"time"
+
 	//"mygodis/db/cmd"
 	logger "mygodis/log"
 	"mygodis/resp"
@@ -17,15 +20,73 @@ type StandaloneDatabaseManager struct {
 	Dbs []any
 	//TODO add pubsub
 	//hub pubsub.Hub
-	//TODO add aof
-	//aof *aof.AOF
-	role uint32
+	persister *aof.Persister
+	role      uint32
 	//TODO add replication
 	//slaveStatus  *slaveStatus
 	//masterStatus *masterStatus
 	//hooks
 	insertCallBack commoninterface.KeyEventCallback
 	deleteCallBack commoninterface.KeyEventCallback
+}
+
+func (d *StandaloneDatabaseManager) ExecWithLock(connection commoninterface.Connection, args cm.CmdLine) (reply resp.Reply) {
+	return d.selectDB(connection.GetDBIndex()).ExecWithLock(args)
+}
+
+func (d *StandaloneDatabaseManager) ExecMulti(connection commoninterface.Connection, watching map[string]uint32, cmdLines []cm.CmdLine) (reply resp.Reply) {
+	return ExecMulti(d.selectDB(connection.GetDBIndex()), connection, watching, cmdLines)
+}
+
+func (d *StandaloneDatabaseManager) GetUndoLogs(dbIndex int, cmd cm.CmdLine) []cm.CmdLine {
+
+	return GetUndoLogs(d.selectDB(dbIndex), cmd)
+}
+
+func (d *StandaloneDatabaseManager) ForEach(dbIndex int, cb func(key string, data *commoninterface.DataEntity, expiration *time.Time) bool) {
+	d.selectDB(dbIndex).ForEach(cb)
+}
+
+func (d *StandaloneDatabaseManager) RWLocks(dbIndex int, writeKeys []string, readKeys []string) {
+	db := d.selectDB(dbIndex)
+	db.RWLocks(writeKeys, readKeys)
+}
+
+func (d *StandaloneDatabaseManager) RWUnLocks(dbIndex int, writeKeys []string, readKeys []string) {
+	db := d.selectDB(dbIndex)
+	db.RWUnLocks(writeKeys, readKeys)
+}
+
+func (d *StandaloneDatabaseManager) GetDBSize(dbIndex int) (int, int) {
+	db := d.selectDB(dbIndex)
+	return db.data.Len(), db.ttlMap.Len()
+}
+
+func (d *StandaloneDatabaseManager) GetEntity(dbIndex int, key string) (*commoninterface.DataEntity, bool) {
+	db := d.selectDB(dbIndex)
+	val, exists := db.data.Get(key)
+	if !exists {
+		return nil, false
+	}
+	entity, result := val.(*commoninterface.DataEntity)
+	return entity, result
+}
+
+func (d *StandaloneDatabaseManager) GetExpiration(dbIndex int, key string) *time.Time {
+	val, exists := d.selectDB(dbIndex).ttlMap.Get(key)
+	if !exists {
+		return nil
+	}
+	t, _ := val.(time.Time)
+	return &t
+}
+
+func (d *StandaloneDatabaseManager) SetKeyInsertedCallback(cb commoninterface.KeyEventCallback) {
+	d.insertCallBack = cb
+}
+
+func (d *StandaloneDatabaseManager) SetKeyDeletedCallback(cb commoninterface.KeyEventCallback) {
+	d.deleteCallBack = cb
 }
 
 func (d *StandaloneDatabaseManager) GetDbInfo(infoType cm.InfoType) []cm.DBInfo {
@@ -153,5 +214,29 @@ func MakeStandaloneServer() *StandaloneDatabaseManager {
 		dbi.index = md
 		manager.Dbs[md] = dbi
 	}
+	//TODO 添加发布订阅
+	if config.Properties.AppendOnly {
+		fsync := aof.Always
+		switch config.Properties.AppendFsync {
+		case "always":
+			fsync = aof.Always
+		case "everysec":
+			fsync = aof.EverySec
+		case "no":
+			fsync = aof.No
+		}
+		aofPersister, err := NewPersister(manager, config.Properties.AppendFilename, true, fsync)
+		if err != nil {
+			logger.Fatal("open aofPersister file error: %v", err)
+		}
+		manager.bindPersister(aofPersister)
+	}
+	if config.Properties.RDBFilename != "" {
+		err := manager.loadRDBFile()
+		if err != nil {
+			logger.Fatal("load rdb file error: %v", err)
+		}
+	}
+	//TODO 添加主从复制
 	return manager
 }

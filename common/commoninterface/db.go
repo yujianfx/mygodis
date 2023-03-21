@@ -22,7 +22,7 @@ type StandaloneDBManage interface {
 type StandaloneDBEngine interface {
 	DB
 	ExecWithLock(connection Connection, args cm.CmdLine) (reply resp.Reply)
-	ExecMulti(connection Connection, watching map[string]uint32, cmdLines [][]byte) (reply resp.Reply)
+	ExecMulti(connection Connection, watching map[string]uint32, cmdLines []cm.CmdLine) (reply resp.Reply)
 	GetUndoLogs(dbIndex int, cmd cm.CmdLine) []cm.CmdLine
 	ForEach(dbIndex int, cb func(key string, data *DataEntity, expiration *time.Time) bool)
 	RWLocks(dbIndex int, writeKeys []string, readKeys []string)

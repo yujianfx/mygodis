@@ -87,7 +87,7 @@ func (dbi *DataBaseImpl) GetEntity(key string) (dataEntity *commoninterface.Data
 	dataEntity, ok = val.(*commoninterface.DataEntity)
 	return
 }
-func (dbi *DataBaseImpl) SetEntity(key string, dataEntity *commoninterface.DataEntity) int {
+func (dbi *DataBaseImpl) PutEntity(key string, dataEntity *commoninterface.DataEntity) int {
 	result := dbi.data.Put(key, dataEntity)
 	if insertCb := dbi.insertCallback; result > 0 && insertCb != nil {
 		insertCb(dbi.index, key, dataEntity)
@@ -144,14 +144,10 @@ func (dbi *DataBaseImpl) Flush() {
 	dbi.ttlMap.Clear()
 	dbi.versionMap.Clear()
 }
-func (dbi *DataBaseImpl) Expire(key string, ttl time.Duration) {
-	if ttl <= 0 {
-		dbi.ttlMap.Remove(key)
-		return
-	}
+func (dbi *DataBaseImpl) Expire(key string, ttl time.Time) {
 	dbi.ttlMap.Put(key, ttl)
 	taskKey := expireTaskKey(key)
-	delay.At(time.Now().Add(ttl), taskKey, func() {
+	delay.At(ttl, taskKey, func() {
 		if val, exists := dbi.ttlMap.Get(key); exists && time.Now().After(val.(time.Time)) {
 			dbi.Remove(key)
 		}
@@ -190,11 +186,11 @@ func (dbi *DataBaseImpl) SetVersion(key ...string) {
 		}
 	}
 }
-func (dbi *DataBaseImpl) ForEach(f func(key string, entity *commoninterface.DataEntity, expireTime time.Time) bool) {
+func (dbi *DataBaseImpl) ForEach(f func(key string, entity *commoninterface.DataEntity, expireTime *time.Time) bool) {
 	dbi.data.ForEach(func(key string, val any) bool {
 		entity := val.(*commoninterface.DataEntity)
 		expireTime, _ := dbi.ttlMap.Get(key)
-		return f(key, entity, expireTime.(time.Time))
+		return f(key, entity, expireTime.(*time.Time))
 	})
 }
 func (dbi *DataBaseImpl) RWLocks(writeKeys []string, readKeys []string) {
