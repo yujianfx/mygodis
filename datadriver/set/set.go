@@ -3,7 +3,7 @@ package set
 import "mygodis/datadriver/dict"
 
 type Set struct {
-	dict dict.Dict
+	dict dict.ConcurrentDict
 }
 
 func Make(members ...string) *Set {
@@ -93,6 +93,16 @@ func (s *Set) Diff(another *Set) *Set {
 		return true
 	})
 	return diff
+}
+func (s *Set) Inter(another *Set) *Set {
+	inter := Make()
+	s.ForEach(func(elem string) bool {
+		if another.Has(elem) {
+			inter.Add(elem)
+		}
+		return true
+	})
+	return inter
 }
 func (s *Set) RandomMembers(limit int) []string {
 	return s.dict.RandomKeys(limit)

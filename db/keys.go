@@ -62,7 +62,7 @@ func execType(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 		return resp.MakeBulkReply([]byte("string"))
 	case list.List:
 		return resp.MakeBulkReply([]byte("list"))
-	case dict.Dict:
+	case dict.ConcurrentDict:
 		return resp.MakeBulkReply([]byte("hash"))
 	case *set.Set:
 		return resp.MakeBulkReply([]byte("set"))
@@ -181,6 +181,7 @@ func execPExpireAt(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	return expire(db, key, ttl)
 }
 func execTTL(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
+	dump(db)
 	key := string(args[0])
 	if _, ok := db.GetEntity(key); !ok {
 		return resp.MakeIntReply(-2)
@@ -297,17 +298,17 @@ func undoExpireCommands(db *DataBaseImpl, line cm.CmdLine) []cm.CmdLine {
 	return []cm.CmdLine{toTTLcmd(db, key).Args}
 }
 func init() {
+	RegisterCommand("exists", execExists, readFirstKey, nil, -2, ReadOnly)
+	RegisterCommand("ttl", execTTL, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("pttl", execPTTL, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("type", execType, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("keys", nil, nil, nil, 3, ReadOnly) // TODO keys
 	RegisterCommand("del", execDelete, writeFirstKey, undoDeleteCommands, -2, Write)
 	RegisterCommand("expire", execExpire, writeFirstKey, undoExpireCommands, 3, Write)
 	RegisterCommand("expireat", execExpireAt, writeFirstKey, undoExpireCommands, 3, Write)
 	RegisterCommand("pexpire", execPExpire, writeFirstKey, undoExpireCommands, 3, Write)
 	RegisterCommand("pexpireat", execPExpireAt, writeFirstKey, undoExpireCommands, 3, Write)
-	RegisterCommand("ttl", execTTL, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("pttl", execPTTL, readFirstKey, nil, 2, ReadOnly)
 	RegisterCommand("persist", execPersist, writeFirstKey, nil, 2, Write)
 	RegisterCommand("rename", execRename, prepareRename, undoRenameCommands, 3, Write)
 	RegisterCommand("renamenx", execRenameNx, prepareRename, undoRenameCommands, 3, Write)
-	RegisterCommand("type", execType, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("keys", nil, nil, nil, 3, ReadOnly) // TODO keys
-
 }

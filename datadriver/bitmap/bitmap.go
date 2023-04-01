@@ -22,8 +22,8 @@ func (b *BitMap) grow(bitSize int64) {
 	}
 	*b = append(*b, make([]byte, gap)...)
 }
-func (b *BitMap) BitSize() int {
-	return len(*b) * 8
+func (b *BitMap) BitSize() int64 {
+	return int64(len(*b) * 8)
 }
 func FromBytes(bytes []byte) *BitMap {
 	bm := BitMap(bytes)
@@ -71,4 +71,65 @@ func (b *BitMap) ForEachByte(begin int64, end int64, cb Callback) {
 		}
 		offset++
 	}
+}
+func prepareBitOp(result *BitMap, bitMap ...*BitMap) {
+	maxSize := int64(0)
+	for _, bm := range bitMap {
+		if bm.BitSize() > maxSize {
+			maxSize = bm.BitSize()
+		}
+	}
+	result.grow(maxSize)
+}
+func And(result *BitMap, bitMap ...*BitMap) {
+	prepareBitOp(result, bitMap...)
+	if len(bitMap) == 1 {
+		result = bitMap[0]
+		return
+	}
+	copy(*result, *bitMap[0])
+	maps := bitMap[2:]
+	for _, bm := range maps {
+		bm.ForEachBit(0, 0, func(offset int64, val byte) bool {
+			result.SetBit(offset, val&bm.GetBit(offset))
+			return true
+		})
+	}
+}
+func Or(result *BitMap, bitMap ...*BitMap) {
+	prepareBitOp(result, bitMap...)
+	if len(bitMap) == 1 {
+		result = bitMap[0]
+		return
+	}
+	copy(*result, *bitMap[0])
+	maps := bitMap[2:]
+	for _, bm := range maps {
+		bm.ForEachBit(0, 0, func(offset int64, val byte) bool {
+			result.SetBit(offset, val|bm.GetBit(offset))
+			return true
+		})
+	}
+
+}
+func Xor(result *BitMap, bitmap ...*BitMap) {
+	prepareBitOp(result, bitmap...)
+	if len(bitmap) == 1 {
+		return
+	}
+	copy(*result, *bitmap[0])
+	target := bitmap[2:]
+	for _, bm := range target {
+		bm.ForEachBit(0, 0, func(offset int64, val byte) bool {
+			result.SetBit(offset, val^bm.GetBit(offset))
+			return true
+		})
+	}
+}
+func Not(result *BitMap, bitmap *BitMap) {
+	prepareBitOp(result, bitmap)
+	bitmap.ForEachBit(0, 0, func(offset int64, val byte) bool {
+		result.SetBit(offset, ^bitmap.GetBit(offset))
+		return true
+	})
 }

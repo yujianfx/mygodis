@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	cm "mygodis/common"
 	"mygodis/common/commoninterface"
 	"mygodis/datadriver/dict"
@@ -12,8 +13,11 @@ import (
 )
 
 const (
-	dataDictSize = 1 << 16
-	ttlDictSize  = 1 << 10
+	//dataDictSize = 1 << 16
+	//ttlDictSize  = 1 << 10
+	//lockerSize   = 1024
+	dataDictSize = 4
+	ttlDictSize  = 4
 	lockerSize   = 1024
 )
 
@@ -27,15 +31,38 @@ type DataBaseImpl struct {
 	deleteCallback commoninterface.KeyEventCallback
 	locker         *lockermap.LockerMap
 }
+
+// Dump used for testing
+func dump(db *DataBaseImpl) {
+	fmt.Println("dumping db")
+	fmt.Println("DB Index: ", db.index)
+	fmt.Println("DB Data: ")
+	db.data.ForEach(func(key string, value any) bool {
+		fmt.Println(key, ":", value)
+		return true
+	})
+	fmt.Println("DB TTL: ")
+	db.ttlMap.ForEach(func(key string, value any) bool {
+		fmt.Println(key, ":", value)
+		return true
+	})
+	fmt.Println("DB Version: ")
+	db.versionMap.ForEach(func(key string, value any) bool {
+		fmt.Println(key, ":", value)
+		return true
+	})
+
+}
+
 type ExecFunc func(db *DataBaseImpl, args cm.CmdLine) resp.Reply
 type PreFunc func(args cm.CmdLine) ([]string, []string)
 type UndoFunc func(db *DataBaseImpl, args cm.CmdLine) []cm.CmdLine
 
 func NewDB() *DataBaseImpl {
 	db := &DataBaseImpl{
-		data:       dict.NewConcurrentDict(dataDictSize),
-		ttlMap:     dict.NewConcurrentDict(ttlDictSize),
-		versionMap: dict.NewConcurrentDict(dataDictSize),
+		data:       dict.NewConcurrentDict(),
+		ttlMap:     dict.NewConcurrentDict(),
+		versionMap: dict.NewConcurrentDict(),
 		locker:     lockermap.NewLockerMap(lockerSize),
 		addAof:     func(line cm.CmdLine) {},
 	}
@@ -43,7 +70,7 @@ func NewDB() *DataBaseImpl {
 }
 func newBasicDB() *DataBaseImpl {
 	db := &DataBaseImpl{
-		data:       dict.NewSimpleDict(dataDictSize),
+		data:       dict.NewConcurrentDict(dataDictSize),
 		ttlMap:     dict.NewSimpleDict(ttlDictSize),
 		versionMap: dict.NewSimpleDict(dataDictSize),
 		//locker:     lock.Make(lockerSize),
@@ -68,16 +95,19 @@ func (dbi *DataBaseImpl) Exec(c commoninterface.Connection, cmd cm.CmdLine) (rep
 		if len(cmd) != 1 {
 			return resp.MakeArgNumErrReply(s)
 		}
+		return execMulti(dbi, c)
 	case "watch": //监视key
 		if len(cmd) < 2 {
 			return resp.MakeArgNumErrReply(s)
 		}
+		return Watch(dbi, c, cmd)
 	}
 	if c != nil && c.InMultiState() {
-		//TODO:事务
+		EnQueue(c, cmd)
 	}
-	//TODO:执行命令
-	return
+	reply = dbi.ExecNormal(cmd)
+	return reply
+
 }
 func (dbi *DataBaseImpl) GetEntity(key string) (dataEntity *commoninterface.DataEntity, ok bool) {
 	val, exists := dbi.data.Get(key) //hash
@@ -148,9 +178,8 @@ func (dbi *DataBaseImpl) Expire(key string, ttl time.Time) {
 	dbi.ttlMap.Put(key, ttl)
 	taskKey := expireTaskKey(key)
 	delay.At(ttl, taskKey, func() {
-		if val, exists := dbi.ttlMap.Get(key); exists && time.Now().After(val.(time.Time)) {
-			dbi.Remove(key)
-		}
+		fmt.Println("到点了 expire key:", key)
+		dbi.Remove(key)
 	})
 }
 func (dbi *DataBaseImpl) Persist(key string) {
@@ -186,11 +215,11 @@ func (dbi *DataBaseImpl) SetVersion(key ...string) {
 		}
 	}
 }
-func (dbi *DataBaseImpl) ForEach(f func(key string, entity *commoninterface.DataEntity, expireTime *time.Time) bool) {
+func (dbi *DataBaseImpl) ForEach(f func(key string, entity *commoninterface.DataEntity, expireTime time.Time) bool) {
 	dbi.data.ForEach(func(key string, val any) bool {
 		entity := val.(*commoninterface.DataEntity)
 		expireTime, _ := dbi.ttlMap.Get(key)
-		return f(key, entity, expireTime.(*time.Time))
+		return f(key, entity, expireTime.(time.Time))
 	})
 }
 func (dbi *DataBaseImpl) RWLocks(writeKeys []string, readKeys []string) {
@@ -205,7 +234,7 @@ func (dbi *DataBaseImpl) ExecNormal(line cm.CmdLine) resp.Reply {
 	if reply != nil {
 		return reply
 	}
-	return command.executor(dbi, line)
+	return command.executor(dbi, line[1:])
 }
 func (dbi *DataBaseImpl) ExecWithLock(line cm.CmdLine) resp.Reply {
 	command, b := GetCommand(line)

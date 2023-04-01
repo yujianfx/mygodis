@@ -5,26 +5,37 @@ import (
 	"testing"
 )
 
-var testCount = 5096000
-var dict = NewConcurrentDict(4)
+var testCount = 96000
+var dict = NewConcurrentDict()
 
 func loadData() {
 	for i := 0; i < testCount; i++ {
 		dict.Put(fmt.Sprintf("key%d", i), i)
 	}
 }
+func TestConcurrentDict_Get2(t *testing.T) {
+	concurrentDict := NewConcurrentDict()
+	concurrentDict.Put("a", 666)
+	concurrentDict.Put("b", 777)
+	concurrentDict.Put("c", 888)
+	concurrentDict.Put("a", 999)
+	concurrentDict.ForEach(func(key string, value interface{}) bool {
+		fmt.Println(key, value)
+		return true
+	})
+
+}
 func TestConcurrentDict_Put(t *testing.T) {
 	loadData()
 	for i := 0; i < testCount; i++ {
 		dict.Put(fmt.Sprintf("%d", i), i)
 	}
-	fmt.Printf("rehash trigger count: %d, rehash finish count: %d\n", dict.reHashTriggerCount, dict.reHashFinishCount)
-	fmt.Println(dict.size)
+
 }
 func TestConcurrentDict_Get(t *testing.T) {
 	loadData()
 	successCount := 0
-	fmt.Printf("rehash trigger count: %d, rehash finish count: %d\n", dict.reHashTriggerCount, dict.reHashFinishCount)
+
 	t.Run("Get", func(t *testing.T) {
 		for i := 0; i < testCount; i++ {
 			if val, exists := dict.Get(fmt.Sprintf("%d", i)); exists && val == i {
@@ -95,4 +106,17 @@ func TestConcurrentDict_GOPut(t *testing.T) {
 	for i := 0; i < testCount; i++ {
 		m[fmt.Sprintf("%d", i)] = i
 	}
+}
+func FuzzConcurrentDict_Put(f *testing.F) {
+	dict := NewConcurrentDict()
+	f.Add([]byte("key1"), []byte("value1"))
+	f.Add([]byte("key2"), []byte("value2"))
+	f.Add([]byte("key3"), []byte("value3"))
+	f.Fuzz(func(t *testing.T, key, value []byte) {
+		dict.Put(string(key), string(value))
+		if val, exists := dict.Get(string(key)); !exists || val != string(value) {
+			t.Errorf("key: %s, value: %s", string(key), string(value))
+			t.Errorf("get failed, expected %s,but got %s", string(value), val)
+		}
+	})
 }

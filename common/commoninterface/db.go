@@ -24,12 +24,12 @@ type StandaloneDBEngine interface {
 	ExecWithLock(connection Connection, args cm.CmdLine) (reply resp.Reply)
 	ExecMulti(connection Connection, watching map[string]uint32, cmdLines []cm.CmdLine) (reply resp.Reply)
 	GetUndoLogs(dbIndex int, cmd cm.CmdLine) []cm.CmdLine
-	ForEach(dbIndex int, cb func(key string, data *DataEntity, expiration *time.Time) bool)
+	ForEach(dbIndex int, cb func(key string, data *DataEntity, expiration time.Time) bool)
 	RWLocks(dbIndex int, writeKeys []string, readKeys []string)
 	RWUnLocks(dbIndex int, writeKeys []string, readKeys []string)
 	GetDBSize(dbIndex int) (int, int)
 	GetEntity(dbIndex int, key string) (*DataEntity, bool)
-	GetExpiration(dbIndex int, key string) *time.Time
+	GetExpiration(dbIndex int, key string) time.Time
 	SetKeyInsertedCallback(cb KeyEventCallback)
 	SetKeyDeletedCallback(cb KeyEventCallback)
 }

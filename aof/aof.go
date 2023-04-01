@@ -323,17 +323,17 @@ func (persister *Persister) DoRewriteAof(rewriteContext *RewriteContext) error {
 			logger.Error("tmp file rewrite failed: " + err.Error())
 			return err
 		}
-		rewritePersister.db.ForEach(i, func(key string, data *commoninterface.DataEntity, expiration *time.Time) bool {
+		rewritePersister.db.ForEach(i, func(key string, data *commoninterface.DataEntity, expiration time.Time) bool {
 			cmd := EntityToCmd(key, data)
 			if cmd != nil {
 				_, _ = tmpFile.Write(cmd.ToBytes())
 			}
-			if expiration != nil {
-				cmd = ExpireToCmd(key, expiration)
-				if cmd != nil {
-					_, _ = tmpFile.Write(cmd.ToBytes())
-				}
+
+			cmd = ExpireToCmd(key, expiration)
+			if cmd != nil {
+				_, _ = tmpFile.Write(cmd.ToBytes())
 			}
+
 			return true
 		})
 	}

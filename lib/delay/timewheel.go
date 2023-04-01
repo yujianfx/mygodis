@@ -7,12 +7,12 @@ import (
 )
 
 type location struct {
-	slotIndex int
+	slotIndex int64
 	taskNode  *list.Element
 }
 type task struct {
 	delay  time.Duration
-	circle int
+	circle int64
 	key    string
 	job    func()
 }
@@ -21,14 +21,14 @@ type TimeWheel struct {
 	ticker      *time.Ticker
 	slots       []*list.List
 	timer       map[string]*location
-	current     int
-	slotNum     int
+	current     int64
+	slotNum     int64
 	addTaskC    chan task
 	removeTaskC chan string
 	stopC       chan bool
 }
 
-func NewTimeWheel(interval time.Duration, slotNum int) *TimeWheel {
+func NewTimeWheel(interval time.Duration, slotNum int64) *TimeWheel {
 	if interval <= 0 || slotNum <= 0 {
 		return nil
 	}
@@ -44,10 +44,9 @@ func NewTimeWheel(interval time.Duration, slotNum int) *TimeWheel {
 	}
 	tw.initSlots()
 	return tw
-
 }
 func (tw *TimeWheel) initSlots() {
-	for i := 0; i < tw.slotNum; i++ {
+	for i := int64(0); i < tw.slotNum; i++ {
 		tw.slots[i] = list.New()
 	}
 }
@@ -133,10 +132,8 @@ func (tw *TimeWheel) AddTask(delay time.Duration, key string, job func()) {
 func (tw *TimeWheel) RemoveTask(key string) {
 	tw.removeTaskC <- key
 }
-
-func (tw *TimeWheel) getPositionAndCircle(tk *task) (p int, c int) {
-	circle := tk.delay / (tw.interval * time.Duration(tw.slotNum))
-	position := (time.Duration(tw.current) + tk.delay) % time.Duration(tw.slotNum)
-	println("position", position, "circle", circle)
-	return int(position), int(circle)
+func (tw *TimeWheel) getPositionAndCircle(tk *task) (p int64, c int64) {
+	circle := int64(tk.delay) / (int64(tw.interval) * tw.slotNum)
+	position := (tw.current + int64(tk.delay/tw.interval)) % tw.slotNum
+	return position, circle
 }

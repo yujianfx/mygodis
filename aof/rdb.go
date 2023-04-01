@@ -89,9 +89,9 @@ func (persister *Persister) rewriteRdb(ctx *RewriteContext) error {
 		if err != nil {
 			return err
 		}
-		rewritePersister.db.ForEach(i, func(key string, entity *commoninterface.DataEntity, expiration *time.Time) bool {
+		rewritePersister.db.ForEach(i, func(key string, entity *commoninterface.DataEntity, expiration time.Time) bool {
 			var opts []any
-			if expiration != nil {
+			if !expiration.IsZero() {
 				opts = append(opts, rdb.WithTTL(uint64(expiration.UnixNano()/1e6)))
 			}
 			switch obj := entity.Data.(type) {
@@ -113,7 +113,7 @@ func (persister *Persister) rewriteRdb(ctx *RewriteContext) error {
 					return true
 				})
 				err = encoder.WriteListObject(key, val, opts...)
-			case dict.Dict:
+			case dict.ConcurrentDict:
 				val := make(map[string][]byte, obj.Len())
 				obj.ForEach(func(field string, v any) bool {
 					bytes, _ := v.([]byte)

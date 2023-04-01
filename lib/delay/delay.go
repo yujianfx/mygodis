@@ -2,7 +2,7 @@ package delay
 
 import "time"
 
-var timeWheel = NewTimeWheel(100*time.Millisecond, 8)
+var timeWheel = NewTimeWheel(50*time.Millisecond, 8)
 
 func init() {
 	timeWheel.Start()

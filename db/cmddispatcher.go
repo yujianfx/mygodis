@@ -1,6 +1,9 @@
 package db
 
-import cm "mygodis/common"
+import (
+	cm "mygodis/common"
+	"strings"
+)
 
 var cmdContainer = make(map[string]*Command)
 
@@ -23,7 +26,7 @@ func GetCommand(line cm.CmdLine) (*Command, bool) {
 
 }
 func RegisterCommand(name string, executor ExecFunc, prepare PreFunc, rollback UndoFunc, arity int, flags int) {
-	cmdContainer[name] = &Command{
+	cmdContainer[strings.ToLower(name)] = &Command{
 		executor: executor,
 		prepare:  prepare,
 		undo:     rollback,

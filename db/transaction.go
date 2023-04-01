@@ -22,7 +22,7 @@ func DiscardMulti(c commoninterface.Connection) resp.Reply {
 	c.ClearQueuedCmds()
 	return resp.MakeOkReply()
 }
-func Watch(db *DataBaseImpl, c commoninterface.Connection, cmd [][]byte) (reply resp.Reply) {
+func Watch(db *DataBaseImpl, c commoninterface.Connection, cmd cm.CmdLine) (reply resp.Reply) {
 	if len(cmd) < 2 {
 		return resp.MakeArgNumErrReply("watch")
 	}

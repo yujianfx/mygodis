@@ -1,7 +1,9 @@
 package dict
 
 import (
+	"fmt"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -50,4 +52,29 @@ func TestSimpleDict_RandomKeys(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSimpleDict_Get(t *testing.T) {
+	smap := NewSimpleDict(8)
+	for i := 0; i < 100; i++ {
+		smap.Put(strconv.FormatInt(int64(i), 10), i)
+	}
+	for i := 0; i < 100; i++ {
+		val, exists := smap.Get(strconv.FormatInt(int64(i), 10))
+		if !exists || val != i {
+			t.Errorf("Expected %d, but got %d", i, val)
+		}
+	}
+}
+
+func TestSimpleDict_Get2(t *testing.T) {
+	smap := NewSimpleDict(8)
+
+	smap.Put("foo", "bar")
+	smap.Put("foo", "baz")
+	smap.ForEach(func(key string, value any) bool {
+		fmt.Println(key, value)
+		return true
+	})
+
 }

@@ -30,7 +30,7 @@ func EntityToCmd(key string, entity *commoninterface.DataEntity) *resp.MultiBulk
 		result = listToCmd(key, val)
 	case *set.Set:
 		result = setToCmd(key, val)
-	case dict.Dict:
+	case dict.ConcurrentDict:
 		result = hashToCmd(key, val)
 	case *sortedset.ZSet:
 		result = zSetToCmd(key, val)
@@ -68,7 +68,7 @@ func setToCmd(key string, set *set.Set) *resp.MultiBulkReply {
 	})
 	return resp.MakeMultiBulkReply(args)
 }
-func hashToCmd(key string, h dict.Dict) *resp.MultiBulkReply {
+func hashToCmd(key string, h dict.ConcurrentDict) *resp.MultiBulkReply {
 	args := make([][]byte, 2+h.Len()*2)
 	args[0] = hmSetCmd
 	args[1] = []byte(key)

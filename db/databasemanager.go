@@ -43,7 +43,7 @@ func (d *StandaloneDatabaseManager) GetUndoLogs(dbIndex int, cmd cm.CmdLine) []c
 	return GetUndoLogs(d.selectDB(dbIndex), cmd)
 }
 
-func (d *StandaloneDatabaseManager) ForEach(dbIndex int, cb func(key string, data *commoninterface.DataEntity, expiration *time.Time) bool) {
+func (d *StandaloneDatabaseManager) ForEach(dbIndex int, cb func(key string, data *commoninterface.DataEntity, expiration time.Time) bool) {
 	d.selectDB(dbIndex).ForEach(cb)
 }
 
@@ -72,13 +72,13 @@ func (d *StandaloneDatabaseManager) GetEntity(dbIndex int, key string) (*commoni
 	return entity, result
 }
 
-func (d *StandaloneDatabaseManager) GetExpiration(dbIndex int, key string) *time.Time {
+func (d *StandaloneDatabaseManager) GetExpiration(dbIndex int, key string) time.Time {
 	val, exists := d.selectDB(dbIndex).ttlMap.Get(key)
 	if !exists {
-		return nil
+		return time.Time{}
 	}
 	t, _ := val.(time.Time)
-	return &t
+	return t
 }
 
 func (d *StandaloneDatabaseManager) SetKeyInsertedCallback(cb commoninterface.KeyEventCallback) {
@@ -147,7 +147,7 @@ func (d *StandaloneDatabaseManager) FlushAll() {
 func (d *StandaloneDatabaseManager) Exec(connection commoninterface.Connection, cmd cm.CmdLine) (reply resp.Reply) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Warn("server error: %v", r)
+			logger.Warn("server error", r)
 			reply = resp.MakeErrReply("server error")
 		}
 	}()
@@ -160,7 +160,6 @@ func (d *StandaloneDatabaseManager) Exec(connection commoninterface.Connection, 
 	case "slaveof":
 		//TODO  return systemcd.SlaveOf(connection, cmd)
 	case "select":
-
 		return Select(connection, cmd[1:])
 	case "info":
 		return Info(connection, d, cmd)
@@ -193,7 +192,9 @@ func (d *StandaloneDatabaseManager) Exec(connection commoninterface.Connection, 
 	case "replconf":
 		//TODO  return systemcd.ReplConf(connection, cmd)
 	case "psync":
-		//TODO  return systemcd.PSync(connection, cmd)
+	//TODO  return systemcd.PSync(connection, cmd)
+	default:
+		return d.selectDB(connection.GetDBIndex()).Exec(connection, cmd)
 	}
 	return nil
 }
@@ -227,14 +228,14 @@ func MakeStandaloneServer() *StandaloneDatabaseManager {
 		}
 		aofPersister, err := NewPersister(manager, config.Properties.AppendFilename, true, fsync)
 		if err != nil {
-			logger.Fatal("open aofPersister file error: %v", err)
+			logger.Fatal("open aofPersister file error: ", err)
 		}
 		manager.bindPersister(aofPersister)
 	}
 	if config.Properties.RDBFilename != "" {
 		err := manager.loadRDBFile()
 		if err != nil {
-			logger.Fatal("load rdb file error: %v", err)
+			logger.Error("load rdb file error: ", err)
 		}
 	}
 	//TODO 添加主从复制

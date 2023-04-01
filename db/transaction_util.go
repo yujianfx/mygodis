@@ -48,8 +48,8 @@ func rollbackGivenKeys(db *DataBaseImpl, keys ...string) []cm.CmdLine {
 			)
 		} else {
 			undoCmdLines = append(undoCmdLines,
-				cmdutil.ToCmdLine("DEL", key), // clean existed first
-				aof.EntityToCmd(key, entity).Args,
+				cmdutil.ToCmdLine("DEL", key),     // clean existed first
+				aof.EntityToCmd(key, entity).Args, // then restore
 				ToTTLCmdLine(db, key).Args,
 			)
 		}
@@ -100,7 +100,6 @@ func prepareSetCalculate(args cm.CmdLine) ([]string, []string) {
 	}
 	return nil, keys
 }
-
 func prepareSetCalculateStore(args cm.CmdLine) ([]string, []string) {
 	dest := string(args[0])
 	keys := make([]string, len(args)-1)
