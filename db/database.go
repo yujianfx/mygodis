@@ -70,7 +70,7 @@ func NewDB() *DataBaseImpl {
 }
 func newBasicDB() *DataBaseImpl {
 	db := &DataBaseImpl{
-		data:       dict.NewConcurrentDict(dataDictSize),
+		data:       dict.NewConcurrentDict(),
 		ttlMap:     dict.NewSimpleDict(ttlDictSize),
 		versionMap: dict.NewSimpleDict(dataDictSize),
 		//locker:     lock.Make(lockerSize),
