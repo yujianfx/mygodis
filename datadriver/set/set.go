@@ -3,7 +3,7 @@ package set
 import "mygodis/datadriver/dict"
 
 type Set struct {
-	dict dict.ConcurrentDict
+	dict dict.Dict
 }
 
 func Make(members ...string) *Set {

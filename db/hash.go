@@ -8,21 +8,21 @@ import (
 	"strconv"
 )
 
-func (db *DataBaseImpl) getAsHash(key string) (dict.ConcurrentDict, resp.ErrorReply) {
+func (db *DataBaseImpl) getAsHash(key string) (dict.Dict, resp.ErrorReply) {
 	entity, exists := db.GetEntity(key)
 	if !exists {
 		return nil, nil
 	}
-	dict, ok := entity.Data.(dict.ConcurrentDict)
+	dict, ok := entity.Data.(dict.Dict)
 	if !ok {
 		return nil, &resp.WrongTypeErrReply{}
 	}
 	return dict, nil
 }
-func (db *DataBaseImpl) getOrCreateAsHash(key string) (result dict.ConcurrentDict, isNew bool) {
+func (db *DataBaseImpl) getOrCreateAsHash(key string) (result dict.Dict, isNew bool) {
 	d, _ := db.getAsHash(key)
 	if d == nil {
-		d = dict.NewConcurrentDict(8)
+		d = dict.NewConcurrentDict()
 		return d, true
 	}
 	return d, false
