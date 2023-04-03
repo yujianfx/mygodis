@@ -27,7 +27,6 @@ func (db *DataBaseImpl) getOrCreateAsHash(key string) (result dict.Dict, isNew b
 	}
 	return d, false
 }
-
 func execHGet(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if len(args) != 2 {
 		return resp.MakeErrReply("wrong number of arguments for 'hget' command")
@@ -282,8 +281,7 @@ func execHVals(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	return resp.MakeMultiBulkReply(result)
 }
 
-//TODO hscan
-
+// TODO hscan
 func undoHSetCommands(db *DataBaseImpl, args cm.CmdLine) []cm.CmdLine {
 	if len(args) != 3 {
 		return nil

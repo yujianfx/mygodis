@@ -2,19 +2,19 @@ package delay
 
 import "time"
 
-var timeWheel = NewTimeWheel(50*time.Millisecond, 8)
+var timeWheel = NewTimeWheel()
 
 func init() {
 	timeWheel.Start()
 }
 
 func Delay(duration time.Duration, key string, job func()) {
-	timeWheel.AddTask(duration, key, job)
+	timeWheel.Add(key, time.Now().Add(duration), job)
 }
 
 func At(at time.Time, key string, job func()) {
-	timeWheel.AddTask(at.Sub(time.Now()), key, job)
+	timeWheel.Add(key, at, job)
 }
 func Cancel(key string) {
-	timeWheel.RemoveTask(key)
+	timeWheel.Remove(key)
 }

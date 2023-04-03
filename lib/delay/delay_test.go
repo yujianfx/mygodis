@@ -40,21 +40,22 @@ func TestAt(t *testing.T) {
 	execCount := 0
 	stop := make(chan struct{})
 	tests := []time.Duration{
-		1 * time.Second,
-		1 * time.Second,
+		//1 * time.Second,
+		//1 * time.Second,
+		//1 * time.Second,
 		1 * time.Second,
 		1 * time.Second,
 		1 * time.Second,
 		1 * time.Second,
 		//1 * time.Second,
-		//1 * time.Second,
-		//9 * time.Second,
+		9 * time.Second,
 		//10 * time.Second,
 	}
 	for _, d := range tests {
 		t.Run(d.String(), func(t *testing.T) {
 			At(time.Now().Add(d), d.String(), func() {
 				execCount++
+				fmt.Println("execCount->", execCount)
 			})
 		})
 	}

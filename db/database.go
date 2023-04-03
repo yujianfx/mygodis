@@ -179,6 +179,11 @@ func (dbi *DataBaseImpl) Expire(key string, ttl time.Time) {
 	taskKey := expireTaskKey(key)
 	delay.At(ttl, taskKey, func() {
 		fmt.Println("到点了 expire key:", key)
+		val, exists := dbi.data.Get(key)
+		if !exists {
+			fmt.Println("key不存在")
+		}
+		fmt.Printf("key:%s,-> value:%v将会被删除", key, val)
 		dbi.Remove(key)
 	})
 }

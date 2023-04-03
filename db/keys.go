@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"mygodis/aof"
 	cm "mygodis/common"
 	"mygodis/common/commoninterface"
@@ -44,7 +45,7 @@ func execExists(db *DataBaseImpl, cmd cm.CmdLine) resp.Reply {
 	}
 	return resp.MakeIntReply(int64(count))
 }
-func execFlushDB(db DataBaseImpl, line cm.CmdLine) resp.Reply {
+func execFlushDB(db *DataBaseImpl, line cm.CmdLine) resp.Reply {
 	db.Flush()
 	db.addAof(cmdutil.ToCmdLine("flushdb"))
 	return resp.MakeOkReply()
@@ -122,6 +123,8 @@ func execRenameNx(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	return resp.MakeOkReply()
 }
 func expire(db *DataBaseImpl, key string, t time.Time) resp.Reply {
+
+	fmt.Printf("key %s expire at %s and now is %s\n", key, t.Format("2006-01-02 15:04:05"), time.Now().Format("2006-01-02 15:04:05"))
 	db.Expire(key, t)
 	db.addAof(aof.ExpireToCmd(key, t).Args)
 	return resp.MakeIntReply(1)
@@ -173,7 +176,7 @@ func execPExpireAt(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if err != nil {
 		return resp.MakeErrReply("ERR value is not an integer or out of range")
 	}
-	ttl := time.Unix(0, parseInt*int64(time.Millisecond))
+	ttl := time.UnixMilli(parseInt)
 	_, ok := db.GetEntity(key)
 	if !ok {
 		return resp.MakeIntReply(0)
