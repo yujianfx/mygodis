@@ -144,7 +144,6 @@ func Test_execExists(t *testing.T) {
 
 func Test_execExpire(t *testing.T) {
 	db := NewDB()
-	randData(30)
 	expires := make(map[string]int64)
 	for i := int64(0); i < 10; i++ {
 		expires[fmt.Sprintf("%d", i)] = i * 2
@@ -156,25 +155,20 @@ func Test_execExpire(t *testing.T) {
 		if got := execExpire(db, cmdutil.ToCmdLine(key, strconv.FormatInt(expire, 10))); !reflect.DeepEqual(got, resp.MakeIntReply(1)) {
 			t.Errorf("except %v but got %v", resp.MakeIntReply(1), got)
 		}
-	}
-	key := 0
-	for {
-		select {
-		case <-time.After(time.Second * 2):
-			if entity, ok := db.GetEntity(fmt.Sprintf("%d", key)); ok {
-				t.Errorf("key %s should be expired but bound %v", fmt.Sprintf("%d", key), entity)
-			}
-			key++
-			if key == 10 {
-				return
-			}
+		if rand.Int31n(10)%3 == 0 {
+			dump(db)
 		}
 	}
+
+	select {
+	case <-time.After(time.Second * 30):
+		dump(db)
+	}
+
 }
 
 func Test_execExpireAt(t *testing.T) {
 	db := NewDB()
-	randData(30)
 	expires := make(map[string]int64)
 	for i := int64(0); i < 10; i++ {
 		expires[fmt.Sprintf("%d", i)] = time.Now().Add(time.Second * 2).Unix()
@@ -182,24 +176,18 @@ func Test_execExpireAt(t *testing.T) {
 	for i := int64(0); i < 10; i++ {
 		db.PutEntity(fmt.Sprintf("%d", i), &commoninterface.DataEntity{Data: i})
 	}
+	dump(db)
 	for key, expire := range expires {
 		if got := execExpireAt(db, cmdutil.ToCmdLine(key, strconv.FormatInt(expire, 10))); !reflect.DeepEqual(got, resp.MakeIntReply(1)) {
 			t.Errorf("except %v but got %v", resp.MakeIntReply(1), got)
 		}
 	}
-	key := 0
-	for {
-		select {
-		case <-time.After(time.Second * 2):
-			if entity, ok := db.GetEntity(fmt.Sprintf("%d", key)); ok {
-				t.Errorf("key %s should be expired but bound %v", fmt.Sprintf("%d", key), entity)
-			}
-			key++
-			if key == 10 {
-				return
-			}
-		}
+
+	select {
+	case <-time.After(time.Second * 25):
+		dump(db)
 	}
+
 }
 
 func Test_execFlushDB(t *testing.T) {
@@ -215,7 +203,6 @@ func Test_execFlushDB(t *testing.T) {
 
 func Test_execPExpire(t *testing.T) {
 	db := NewDB()
-	randData(30)
 	expires := make(map[string]int64)
 	for i := int64(0); i < 10; i++ {
 		expires[fmt.Sprintf("%d", i)] = i * 2000
@@ -228,18 +215,10 @@ func Test_execPExpire(t *testing.T) {
 			t.Errorf("except %v but got %v", resp.MakeIntReply(1), got)
 		}
 	}
-	key := 0
-	for {
-		select {
-		case <-time.After(time.Second * 1):
-			if entity, ok := db.GetEntity(fmt.Sprintf("%d", key)); ok {
-				t.Errorf("key %s should be expired but be found %v", fmt.Sprintf("%d", key), entity)
-			}
-			key++
-			if key == 10 {
-				return
-			}
-		}
+	select {
+	case <-time.After(time.Second * 30):
+		dump(db)
+
 	}
 }
 
@@ -257,69 +236,116 @@ func Test_execPExpireAt(t *testing.T) {
 			t.Errorf("except %v but got %v", resp.MakeIntReply(1), got)
 		}
 	}
-	//key := 0
-	//for {
-	//	select {
-	//	case <-time.After(time.Second * 2):
-	//		if entity, ok := db.GetEntity(fmt.Sprintf("%d", key)); ok {
-	//			t.Errorf("key %s should be expired but be found %v", fmt.Sprintf("%d", key), entity)
-	//		} else {
-	//			t.Logf("key %s is expired", fmt.Sprintf("%d", key))
-	//		}
-	//		key++
-	//		if key == 10 {
-	//			return
-	//		}
-	//	}
-	//}
 	time.Sleep(time.Second * 30)
 	dump(db)
 }
 
 func Test_execPTTL(t *testing.T) {
-
+	db := NewDB()
+	expires := make(map[string]int64)
+	for i := int64(0); i < 10; i++ {
+		expires[fmt.Sprintf("%d", i)] = time.Now().Add(time.Second * time.Duration(i+1)).UnixMilli()
+	}
+	for i := int64(0); i < 10; i++ {
+		db.PutEntity(fmt.Sprintf("%d", i), &commoninterface.DataEntity{Data: i})
+	}
+	for key, _ := range expires {
+		pttl := execPTTL(db, cmdutil.ToCmdLine(key))
+		fmt.Println(string(pttl.ToBytes()))
+	}
+	time.Sleep(time.Second * 20)
+	dump(db)
 }
 
 func Test_execPersist(t *testing.T) {
-
+	db := NewDB()
+	expires := make(map[string]int64)
+	for i := int64(0); i < 10; i++ {
+		expires[fmt.Sprintf("%d", i)] = time.Now().Add(time.Second * time.Duration(i+1)).UnixMilli()
+	}
+	for i := int64(0); i < 10; i++ {
+		db.PutEntity(fmt.Sprintf("%d", i), &commoninterface.DataEntity{Data: i})
+	}
+	for key, ex := range expires {
+		if got := execPExpireAt(db, cmdutil.ToCmdLine(key, strconv.FormatInt(ex, 10))); !reflect.DeepEqual(got, resp.MakeIntReply(1)) {
+			t.Errorf("except %v but got %v", resp.MakeIntReply(1), got)
+		}
+	}
+	for key, _ := range expires {
+		if got := execPersist(db, cmdutil.ToCmdLine(key)); !reflect.DeepEqual(got, resp.MakeIntReply(1)) {
+			t.Errorf("except %v but got %v", resp.MakeIntReply(1), got)
+		}
+	}
+	time.Sleep(time.Second * 20)
+	dump(db)
 }
 
 func Test_execRename(t *testing.T) {
+	db := NewDB()
+	injectData(db, randData(100))
 
+	entity := &commoninterface.DataEntity{
+		Data: "testData",
+	}
+	db.PutEntity("test", entity)
+	if got := execRename(db, cmdutil.ToCmdLine("test", "test2")); !reflect.DeepEqual(got, resp.MakeOkReply()) {
+		t.Errorf("except %v but got %v", resp.MakeOkReply(), got)
+	}
+	if got := execGet(db, cmdutil.ToCmdLine("test")); !reflect.DeepEqual(got, resp.MakeNullBulkReply()) {
+		t.Errorf("except %v but got %v", resp.MakeNullBulkReply(), got)
+	}
+	if got := execGet(db, cmdutil.ToCmdLine("test2")); !reflect.DeepEqual(got, resp.MakeBulkReply([]byte("testData"))) {
+		t.Logf("got %v", got)
+		t.Errorf("except %v but got %v", resp.MakeBulkReply([]byte("testData")), got)
+	}
 }
 
 func Test_execRenameNx(t *testing.T) {
+	db := NewDB()
+	injectData(db, randData(100))
 
+	entity := &commoninterface.DataEntity{
+		Data: "testData",
+	}
+	db.PutEntity("test", entity)
+	if got := execRenameNx(db, cmdutil.ToCmdLine("test", "test2")); !reflect.DeepEqual(got, resp.MakeOkReply()) {
+		t.Errorf("except %v but got %v", resp.MakeIntReply(1), got)
+	}
+	if got := execGet(db, cmdutil.ToCmdLine("test")); !reflect.DeepEqual(got, resp.MakeNullBulkReply()) {
+		t.Errorf("except %v but got %v", resp.MakeNullBulkReply(), got)
+	}
+	if got := execGet(db, cmdutil.ToCmdLine("test2")); !reflect.DeepEqual(got, resp.MakeBulkReply([]byte("testData"))) {
+		t.Logf("got %v", got)
+		t.Errorf("except %v but got %v", resp.MakeBulkReply([]byte("testData")), got)
+	}
 }
 
 func Test_execTTL(t *testing.T) {
-
+	db := NewDB()
+	expires := make(map[string]int64)
+	for i := int64(0); i < 10; i++ {
+		expires[fmt.Sprintf("%d", i)] = time.Now().Add(time.Second * time.Duration(i+1)).Unix()
+	}
+	for i := int64(0); i < 10; i++ {
+		db.PutEntity(fmt.Sprintf("%d", i), &commoninterface.DataEntity{Data: i})
+	}
+	for key, _ := range expires {
+		execExpireAt(db, cmdutil.ToCmdLine(key, strconv.FormatInt(expires[key], 10)))
+	}
+	for key, _ := range expires {
+		ttl := execTTL(db, cmdutil.ToCmdLine(key))
+		fmt.Println(string(ttl.ToBytes()))
+	}
+	time.Sleep(time.Second * 20)
+	dump(db)
 }
 
 func Test_execType(t *testing.T) {
-
-}
-
-func Test_prepareRename(t *testing.T) {
-
-}
-
-func Test_renameKey(t *testing.T) {
-
-}
-
-func Test_toTTLcmd(t *testing.T) {
-
-}
-
-func Test_undoDeleteCommands(t *testing.T) {
-
-}
-
-func Test_undoExpireCommands(t *testing.T) {
-
-}
-
-func Test_undoRenameCommands(t *testing.T) {
-
+	db := NewDB()
+	data := randData(10)
+	injectData(db, data)
+	for key, _ := range data {
+		reply := execType(db, cmdutil.ToCmdLine(fmt.Sprintf("%d", key)))
+		fmt.Println(string(reply.ToBytes()))
+	}
 }

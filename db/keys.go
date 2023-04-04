@@ -1,7 +1,6 @@
 package db
 
 import (
-	"fmt"
 	"mygodis/aof"
 	cm "mygodis/common"
 	"mygodis/common/commoninterface"
@@ -123,8 +122,6 @@ func execRenameNx(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	return resp.MakeOkReply()
 }
 func expire(db *DataBaseImpl, key string, t time.Time) resp.Reply {
-
-	fmt.Printf("key %s expire at %s and now is %s\n", key, t.Format("2006-01-02 15:04:05"), time.Now().Format("2006-01-02 15:04:05"))
 	db.Expire(key, t)
 	db.addAof(aof.ExpireToCmd(key, t).Args)
 	return resp.MakeIntReply(1)
@@ -184,7 +181,6 @@ func execPExpireAt(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	return expire(db, key, ttl)
 }
 func execTTL(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
-	dump(db)
 	key := string(args[0])
 	if _, ok := db.GetEntity(key); !ok {
 		return resp.MakeIntReply(-2)
@@ -286,8 +282,8 @@ func prepareRename(args cm.CmdLine) ([]string, []string) {
 }
 func undoDeleteCommands(db *DataBaseImpl, line cm.CmdLine) []cm.CmdLine {
 	keys := make([]string, 0, len(line))
-	for i, v := range line {
-		keys[i] = string(v)
+	for _, v := range line {
+		keys = append(keys, string(v))
 	}
 	return rollbackGivenKeys(db, keys...)
 }

@@ -7,6 +7,7 @@ import (
 	"mygodis/datadriver/dict"
 	"mygodis/lib/delay"
 	"mygodis/lib/sync/lockermap"
+	logger "mygodis/log"
 	"mygodis/resp"
 	"strings"
 	"time"
@@ -34,6 +35,8 @@ type DataBaseImpl struct {
 
 // Dump used for testing
 func dump(db *DataBaseImpl) {
+	fmt.Println("")
+	fmt.Println("###################")
 	fmt.Println("dumping db")
 	fmt.Println("DB Index: ", db.index)
 	fmt.Println("DB Data: ")
@@ -178,12 +181,11 @@ func (dbi *DataBaseImpl) Expire(key string, ttl time.Time) {
 	dbi.ttlMap.Put(key, ttl)
 	taskKey := expireTaskKey(key)
 	delay.At(ttl, taskKey, func() {
-		fmt.Println("到点了 expire key:", key)
-		val, exists := dbi.data.Get(key)
+		_, exists := dbi.data.Get(key)
 		if !exists {
-			fmt.Println("key不存在")
+			logger.Warn("expire key not exists", "key", key)
+			return
 		}
-		fmt.Printf("key:%s,-> value:%v将会被删除", key, val)
 		dbi.Remove(key)
 	})
 }

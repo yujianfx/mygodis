@@ -41,6 +41,8 @@ func (db *DataBaseImpl) getAsString(key string) ([]byte, resp.ErrorReply) {
 	switch val := entity.Data.(type) {
 	case []byte:
 		return val, nil
+	case string:
+		return []byte(val), nil
 	default:
 		return nil, resp.MakeErrReply("value is not a string")
 	}
@@ -619,32 +621,46 @@ func execBitCount(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if err != nil {
 		return resp.MakeErrReply(err.Error())
 	}
-	bitMap := bitmap.FromBytes(value)
-	start, startErr := strconv.ParseInt(string(args[1]), 10, 64)
-	if startErr != nil {
-		return resp.MakeErrReply(err.Error())
-	}
-	end, endErr := strconv.ParseInt(string(args[2]), 10, 64)
-	if endErr != nil {
-		return resp.MakeErrReply(err.Error())
-	}
-	if start < 0 {
-		start = 0
-	}
-	if end > int64(len(value)) {
-		end = int64(len(value))
-	}
-	if start > end {
+	if len(value) == 0 {
 		return resp.MakeIntReply(0)
 	}
+	bitMap := bitmap.FromBytes(value)
+	if len(args) == 3 {
+		start, startErr := strconv.ParseInt(string(args[1]), 10, 64)
+		if startErr != nil {
+			return resp.MakeErrReply(err.Error())
+		}
+		end, endErr := strconv.ParseInt(string(args[2]), 10, 64)
+		if endErr != nil {
+			return resp.MakeErrReply(err.Error())
+		}
+		if start < 0 {
+			start = 0
+		}
+		if end > bitMap.BitSize() {
+			end = bitMap.BitSize()
+		}
+		if start > end {
+			return resp.MakeIntReply(0)
+		}
+		count := int64(0)
+		bitMap.ForEachBit(start, end, func(offset int64, bit byte) bool {
+			if bit == 1 {
+				count++
+			}
+			return true
+		})
+		return resp.MakeIntReply(count)
+	}
 	count := int64(0)
-	bitMap.ForEachBit(start, end, func(offset int64, bit byte) bool {
+	bitMap.ForEachBit(0, bitMap.BitSize(), func(offset int64, bit byte) bool {
 		if bit == 1 {
 			count++
 		}
 		return true
 	})
 	return resp.MakeIntReply(count)
+
 }
 func execBitOp(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	op := string(args[0])
@@ -654,6 +670,7 @@ func execBitOp(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 		if len(args) < 3 {
 			return resp.MakeErrReply("ERR syntax error")
 		}
+		bitMaps := make([]*bitmap.BitMap, 0, len(args)-2)
 		for i := 2; i < len(args); i++ {
 			value, err := db.getAsString(string(args[i]))
 			if err != nil {
@@ -662,9 +679,11 @@ func execBitOp(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 			if value == nil {
 				return resp.MakeErrReply("ERR key not exists")
 			}
-			bitmap.And(bitMap, bitmap.FromBytes(value))
+			bitMaps = append(bitMaps, bitmap.FromBytes(value))
 		}
+		bitmap.And(bitMap, bitMaps...)
 	case "OR":
+		bitMaps := make([]*bitmap.BitMap, 0, len(args)-2)
 		if len(args) < 3 {
 			return resp.MakeErrReply("ERR syntax error")
 		}
@@ -676,9 +695,11 @@ func execBitOp(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 			if value == nil {
 				return resp.MakeErrReply("ERR key not exists")
 			}
-			bitmap.Or(bitMap, bitmap.FromBytes(value))
+			bitMaps = append(bitMaps, bitmap.FromBytes(value))
 		}
+		bitmap.Or(bitMap, bitMaps...)
 	case "XOR":
+		bitMaps := make([]*bitmap.BitMap, 0, len(args)-2)
 		if len(args) < 3 {
 			return resp.MakeErrReply("ERR syntax error")
 		}
@@ -690,8 +711,9 @@ func execBitOp(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 			if value == nil {
 				return resp.MakeErrReply("ERR key not exists")
 			}
-			bitmap.Xor(bitMap, bitmap.FromBytes(value))
+			bitMaps = append(bitMaps, bitmap.FromBytes(value))
 		}
+		bitmap.Xor(bitMap, bitMaps...)
 	case "NOT":
 		if len(args) != 3 {
 			return resp.MakeErrReply("ERR syntax error")
