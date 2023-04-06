@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"mygodis/common"
 	"mygodis/common/commoninterface"
 	"mygodis/datadriver/bitmap"
@@ -586,27 +587,6 @@ func Test_execBitCount(t *testing.T) {
 	}
 }
 
-var bitopFunc = func(op string, dest string, keys []string) []byte {
-	var result []byte
-	for _, key := range keys {
-		if result == nil {
-			result = []byte(key)
-		} else {
-			switch op {
-			case "AND":
-				bitmap.And(bitmap.FromBytes(result), bitmap.FromBytes([]byte(key)))
-			case "OR":
-				bitmap.Or(bitmap.FromBytes(result), bitmap.FromBytes([]byte(key)))
-			case "XOR":
-				bitmap.Xor(bitmap.FromBytes(result), bitmap.FromBytes([]byte(key)))
-			case "NOT":
-				bitmap.Not(bitmap.FromBytes(result), bitmap.FromBytes([]byte(key)))
-			}
-		}
-	}
-	return result
-}
-
 func Test_execBitOp(t *testing.T) {
 	type args struct {
 		db   *DataBaseImpl
@@ -725,7 +705,38 @@ func Test_execDecr(t *testing.T) {
 		name string
 		args args
 		want resp.Reply
-	}{}
+	}{
+		{
+			name: "decr with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeIntReply(-1),
+		},
+		{
+			name: "decr with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeIntReply(-1),
+		},
+		{
+			name: "decr with string",
+			args: args{
+				db: dbWithData(NewDB(), "key", "2"),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := execDecr(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
@@ -745,8 +756,64 @@ func Test_execDecrBy(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "decrby with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(-1),
+		},
+		{
+			name: "decrby with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(-1),
+		},
+		{
+			name: "decrby with string",
+			args: args{
+				db: dbWithData(dbWithData(NewDB(), "key", "2"), "key1", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "decrby with string and negative number",
+			args: args{
+				db: dbWithData(dbWithData(NewDB(), "key", "2"), "key1", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("-1"),
+				},
+			},
+			want: resp.MakeIntReply(3),
+		},
+		{
+			name: "decrby with string and invalid number",
+			args: args{
+				db: dbWithData(dbWithData(NewDB(), "key", "2"), "key1", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+
+					[]byte("invalid"),
+				},
+			},
+			want: resp.MakeErrReply("strconv.Atoi: parsing \"invalid\": invalid syntax"),
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := execDecrBy(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
@@ -766,7 +833,56 @@ func Test_execGet(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "get with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeNullBulkReply(),
+		},
+		{
+			name: "get with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("")),
+		},
+		{
+			name: "get with string",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("value")),
+		},
+		{
+			name: "get with string and nil key",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte(nil),
+				},
+			},
+			want: resp.MakeNullBulkReply(),
+		},
+		{
+			name: "get with string and empty key",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte(""),
+				},
+			},
+			want: resp.MakeNullBulkReply(),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -787,8 +903,74 @@ func Test_execGetBit(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "getbit with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(0),
+		},
+		{
+			name: "getbit with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(0),
+		},
+		{
+			name: "getbit with string offset 0",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("0"),
+				},
+			},
+			want: resp.MakeIntReply(0),
+		},
+		{
+			name: "getbit with string offset 1",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "getbit with string offset out of range more",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte(fmt.Sprintf("%d", bitmap.FromBytes([]byte("value")).BitSize()+666)),
+				},
+			},
+			want: resp.MakeIntReply(0),
+		},
+		{
+			name: "getbit with string offset out of range less",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte(fmt.Sprintf("%d", -666)),
+				},
+			},
+			want: resp.MakeErrReply("bit offset is not an integer or out of range"),
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := execGetBit(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
@@ -808,33 +990,51 @@ func Test_execGetDel(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "getdel with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeNullBulkReply(),
+		},
+		{
+			name: "getdel with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("")),
+		},
+		{
+			name: "getdel with string",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("value")),
+		},
+		{
+			name: "getdel with string and empty key",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte(""),
+				},
+			},
+			want: resp.MakeNullBulkReply(),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := execGetDel(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("execGetDel() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_execGetEx1(t *testing.T) {
-	type args struct {
-		db   *DataBaseImpl
-		args common.CmdLine
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantRes resp.Reply
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if gotRes := execGetEx(tt.args.db, tt.args.args); !reflect.DeepEqual(gotRes, tt.wantRes) {
-				t.Errorf("execGetEx() = %v, want %v", gotRes, tt.wantRes)
 			}
 		})
 	}
@@ -850,7 +1050,78 @@ func Test_execGetRange(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "getrange with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("0"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeNullBulkReply(),
+		},
+		{
+			name: "getrange with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("0"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("")),
+		},
+		{
+			name: "getrange with string range is safe",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("0"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("v")),
+		},
+		{
+			name: "getrange with string range is unsafe",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("0"),
+					[]byte("666"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("value")),
+		},
+		{
+			name: "getrange with string range is unsafe",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("666"),
+					[]byte("666"),
+				},
+			},
+			want: resp.MakeNullBulkReply(),
+		},
+		{
+			name: "getrange with string range is unsafe",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("-666"),
+					[]byte("-1"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("valu")),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -871,7 +1142,62 @@ func Test_execGetSet(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "getset with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("value"),
+				},
+			},
+			want: resp.MakeNullBulkReply(),
+		},
+		{
+			name: "getset with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("value"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("")),
+		},
+		{
+			name: "getset with string",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("newValue"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("value")),
+		},
+		{
+			name: "getset with string and empty key",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+				args: common.CmdLine{
+					[]byte(""),
+					[]byte("newValue"),
+				},
+			},
+			want: resp.MakeNullBulkReply(),
+		},
+		{
+			name: "getset with string and empty value",
+			args: args{
+				db: dbWithData(NewDB(), "key", "value"),
+
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte(""),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("value")),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -892,7 +1218,46 @@ func Test_execIncr(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "incr with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "incr with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "incr with string",
+			args: args{
+				db: dbWithData(NewDB(), "key", "1"),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeIntReply(2),
+		},
+		{
+			name: "incr with string and empty key",
+			args: args{
+				db: dbWithData(NewDB(), "key", "1"),
+				args: common.CmdLine{
+					[]byte(""),
+				},
+			},
+			want: resp.MakeErrReply("key is empty"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -913,7 +1278,50 @@ func Test_execIncrBy(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "incrby with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "incrby with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "incrby with string",
+			args: args{
+				db: dbWithData(NewDB(), "key", "1"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(2),
+		},
+		{
+			name: "incrby with string and empty key",
+			args: args{
+				db: dbWithData(NewDB(), "key", "1"),
+				args: common.CmdLine{
+					[]byte(""),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeErrReply("key is empty"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -934,7 +1342,49 @@ func Test_execIncrByFloat(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "incrbyfloat with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1.1"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("1.1")),
+		},
+		{
+			name: "incrbyfloat with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1.1"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("1.1")),
+		},
+		{
+			name: "incrbyfloat with string",
+			args: args{
+				db: dbWithData(NewDB(), "key", "1.1"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1.1"),
+				},
+			},
+			want: resp.MakeBulkReply([]byte("2.2")),
+		},
+		{
+			name: "incrbyfloat with string and empty key",
+			args: args{
+				db: dbWithData(NewDB(), "key", "1.1"),
+				args: common.CmdLine{
+					[]byte(""),
+				},
+			},
+			want: resp.MakeErrReply("wrong number of arguments for 'incrbyfloat' command"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -955,8 +1405,60 @@ func Test_execMGet(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "mget with nil",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeMultiBulkReply([][]byte{
+				[]byte(nil),
+			}),
+		},
+		{
+			name: "mget with empty string",
+			args: args{
+				db: dbWithData(NewDB(), "key", ""),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeMultiBulkReply([][]byte{
+				[]byte(""),
+			},
+			),
+		},
+		{
+			name: "mget with string",
+			args: args{
+
+				db: dbWithData(NewDB(), "key", "1"),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeMultiBulkReply([][]byte{
+				[]byte("1"),
+			}),
+		},
+		{
+			name: "mget with multi string",
+			args: args{
+				db: dbWithData(dbWithData(NewDB(), "key1", "1"), "key2", "2"),
+				args: common.CmdLine{
+					[]byte("key1"),
+					[]byte("key2"),
+				},
+			},
+			want: resp.MakeMultiBulkReply([][]byte{
+				[]byte("1"),
+				[]byte("2"),
+			}),
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := execMGet(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
@@ -976,7 +1478,32 @@ func Test_execMSet(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "mset one",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeOkReply(),
+		},
+		{
+			name: "mset multi",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key1"),
+					[]byte("1"),
+					[]byte("key2"),
+					[]byte("2"),
+					[]byte("key3"),
+					[]byte("3"),
+				},
+			},
+			want: resp.MakeOkReply(),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -997,8 +1524,60 @@ func Test_execMSetNx(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "msetnx one key not exist",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "msetnx one key exist",
+			args: args{
+				db: dbWithData(NewDB(), "key", "1"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(0),
+		},
+		{
+			name: "msetnx multi key not exist",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key1"),
+					[]byte("1"),
+					[]byte("key2"),
+					[]byte("2"),
+					[]byte("key3"),
+					[]byte("3"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "msetnx multi key exist",
+			args: args{
+				db: dbWithData(dbWithData(NewDB(), "key1", "1"), "key2", "2"),
+				args: common.CmdLine{
+					[]byte("key1"),
+					[]byte("1"),
+					[]byte("key2"),
+					[]byte("2"),
+					[]byte("key3"),
+					[]byte("3"),
+				},
+			},
+			want: resp.MakeIntReply(0),
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := execMSetNx(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
@@ -1009,86 +1588,56 @@ func Test_execMSetNx(t *testing.T) {
 }
 
 func Test_execPSetEx(t *testing.T) {
-	type args struct {
-		db   *DataBaseImpl
-		args common.CmdLine
+	db := dbWithData(NewDB(), "key", "1")
+	if asString, _ := db.getAsString("key"); string(asString) != "1" {
+		t.Errorf("db.getAsString(\"key\") = %v, want %v", asString, "1")
 	}
-	tests := []struct {
-		name string
-		args args
-		want resp.Reply
-	}{
-		// TODO: Add test cases.
+	t.Run("psetex", func(t *testing.T) {
+		if got := execPSetEx(db, common.CmdLine{[]byte("key"), []byte("3000"), []byte("2")}); !reflect.DeepEqual(got, resp.MakeOkReply()) {
+			t.Errorf("execPSetEx() = %v, want %v", got, resp.MakeOkReply())
+		}
+	})
+	if asString, _ := db.getAsString("key"); string(asString) != "2" {
+		t.Errorf("db.getAsString(\"key\") = %v, want %v", string(asString), "2")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := execPSetEx(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("execPSetEx() = %v, want %v", got, tt.want)
-			}
-		})
+	time.Sleep(5 * time.Second)
+	if asString, _ := db.getAsString("key"); asString != nil {
+		t.Errorf("db.getAsString(\"key\") = %v, want %v", asString, nil)
 	}
-}
 
-func Test_execSet1(t *testing.T) {
-	type args struct {
-		db   *DataBaseImpl
-		args common.CmdLine
-	}
-	tests := []struct {
-		name string
-		args args
-		want resp.Reply
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := execSet(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("execSet() = %v, want %v", got, tt.want)
-			}
-		})
-	}
 }
 
 func Test_execSetBit(t *testing.T) {
-	type args struct {
-		db   *DataBaseImpl
-		args common.CmdLine
-	}
-	tests := []struct {
-		name string
-		args args
-		want resp.Reply
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := execSetBit(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("execSetBit() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	data := dbWithData(NewDB(), "key", "1")
+	t.Run("setbit", func(t *testing.T) {
+		if got := execSetBit(data, common.CmdLine{[]byte("key"), []byte("1"), []byte("1")}); !reflect.DeepEqual(got, resp.MakeIntReply(0)) {
+			t.Errorf("execSetBit() = %v, want %v", got, resp.MakeIntReply(0))
+		}
+	})
+	t.Run("setbit", func(t *testing.T) {
+		if got := execSetBit(data, common.CmdLine{[]byte("key"), []byte("0"), []byte("0")}); !reflect.DeepEqual(got, resp.MakeIntReply(1)) {
+			t.Errorf("execSetBit() = %v, want %v", got, resp.MakeIntReply(1))
+		}
+	})
+
 }
 
 func Test_execSetEx(t *testing.T) {
-	type args struct {
-		db   *DataBaseImpl
-		args common.CmdLine
+	db := dbWithData(NewDB(), "key", "1")
+	if asString, _ := db.getAsString("key"); string(asString) != "1" {
+		t.Errorf("db.getAsString(\"key\") = %v, want %v", asString, "1")
 	}
-	tests := []struct {
-		name string
-		args args
-		want resp.Reply
-	}{
-		// TODO: Add test cases.
+	t.Run("setex", func(t *testing.T) {
+		if got := execSetEx(db, common.CmdLine{[]byte("key"), []byte("3"), []byte("2")}); !reflect.DeepEqual(got, resp.MakeOkReply()) {
+			t.Errorf("execPSetEx() = %v, want %v", got, resp.MakeOkReply())
+		}
+	})
+	if asString, _ := db.getAsString("key"); string(asString) != "2" {
+		t.Errorf("db.getAsString(\"key\") = %v, want %v", string(asString), "2")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := execSetEx(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("execSetEx() = %v, want %v", got, tt.want)
-			}
-		})
+	time.Sleep(5 * time.Second)
+	if asString, _ := db.getAsString("key"); asString != nil {
+		t.Errorf("db.getAsString(\"key\") = %v, want %v", asString, nil)
 	}
 }
 
@@ -1102,7 +1651,28 @@ func Test_execSetNx(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "setnx key not exist",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "setnx key exist",
+			args: args{
+				db: dbWithData(NewDB(), "key", "1"),
+				args: common.CmdLine{
+					[]byte("key"),
+					[]byte("1"),
+				},
+			},
+			want: resp.MakeIntReply(0),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1114,24 +1684,12 @@ func Test_execSetNx(t *testing.T) {
 }
 
 func Test_execSetRange(t *testing.T) {
-	type args struct {
-		db   *DataBaseImpl
-		args common.CmdLine
-	}
-	tests := []struct {
-		name string
-		args args
-		want resp.Reply
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := execSetRange(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("execSetRange() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	dbWithData(NewDB(), "key", "hello world")
+	t.Run("setrange", func(t *testing.T) {
+		if got := execSetRange(NewDB(), common.CmdLine{[]byte("key"), []byte("6"), []byte("redis")}); !reflect.DeepEqual(got, resp.MakeIntReply(11)) {
+			t.Errorf("execSetRange() = %v, want %v", got, resp.MakeIntReply(11))
+		}
+	})
 }
 
 func Test_execStrLen(t *testing.T) {
@@ -1144,7 +1702,26 @@ func Test_execStrLen(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "strlen key not exist",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeIntReply(0),
+		},
+		{
+			name: "strlen key exist",
+			args: args{
+				db: dbWithData(NewDB(), "key", "1"),
+				args: common.CmdLine{
+					[]byte("key"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

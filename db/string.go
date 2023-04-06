@@ -273,11 +273,14 @@ func execSetNx(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	return resp.MakeIntReply(0)
 }
 func execSetEx(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
+	if len(args) != 3 {
+		return resp.MakeErrReply("wrong number of arguments for 'setex' command")
+	}
 	key := string(args[0])
-	value := args[1]
+	value := args[2]
 	data := new(commoninterface.DataEntity)
 	data.Data = value
-	expireMillisecond, err := strconv.Atoi(string(args[2]))
+	expireMillisecond, err := strconv.Atoi(string(args[1]))
 	if err != nil {
 		return resp.MakeErrReply(err.Error())
 	}
@@ -287,11 +290,14 @@ func execSetEx(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	return resp.MakeOkReply()
 }
 func execPSetEx(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
+	if len(args) != 3 {
+		return resp.MakeErrReply("wrong number of arguments for 'psetex' command")
+	}
 	key := string(args[0])
-	value := args[1]
+	value := args[2]
 	data := new(commoninterface.DataEntity)
 	data.Data = value
-	expireMillisecond, err := strconv.Atoi(string(args[2]))
+	expireMillisecond, err := strconv.Atoi(string(args[1]))
 	if err != nil {
 		return resp.MakeErrReply(err.Error())
 	}
@@ -333,17 +339,25 @@ func execMGet(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	return resp.MakeMultiBulkReply(strings)
 }
 func execMSetNx(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
-	if len(args)%2 != 0 {
+	if len(args)%2 != 0 || len(args) == 0 {
 		return resp.MakeErrReply("wrong number of arguments for 'mset' command")
 	}
+	keys := make([]string, 0, len(args)/2)
+	value := make([]string, 0, len(args)/2)
 	for i := 0; i < len(args); i += 2 {
 		key := string(args[i])
-		value := string(args[i+1])
-		data := new(commoninterface.DataEntity)
-		data.Data = value
-		if db.PutAbsent(key, data) == 0 {
+		keys = append(keys, key)
+		value = append(value, string(args[i+1]))
+	}
+	for key := range keys {
+		if _, ok := db.GetEntity(keys[key]); ok {
 			return resp.MakeIntReply(0)
 		}
+	}
+	for key := range keys {
+		data := new(commoninterface.DataEntity)
+		data.Data = value[key]
+		db.PutEntity(keys[key], data)
 	}
 	return resp.MakeIntReply(1)
 }
@@ -376,65 +390,78 @@ func execGetDel(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 }
 func execIncr(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	key := string(args[0])
+	if len(key) == 0 {
+		return resp.MakeErrReply("key is empty")
+	}
 	value, err := db.getAsString(key)
 	if err != nil {
 		return resp.MakeErrReply(err.Error())
 	}
-	if value == nil {
-		db.PutEntity(key, new(commoninterface.DataEntity))
+	if value == nil || len(value) == 0 {
+		entity := new(commoninterface.DataEntity)
+		entity.Data = []byte("1")
+		db.PutEntity(key, entity)
 		return resp.MakeIntReply(1)
 	}
 	intValue, parseErr := strconv.Atoi(string(value))
 	if parseErr != nil {
-		return resp.MakeErrReply(err.Error())
+		return resp.MakeErrReply(parseErr.Error())
 	}
 	intValue++
-	db.PutEntity(key, new(commoninterface.DataEntity))
+	dataEntity := new(commoninterface.DataEntity)
+	dataEntity.Data = []byte(fmt.Sprintf("%d", intValue))
+	db.PutEntity(key, dataEntity)
 	return resp.MakeIntReply(int64(intValue))
 }
 func execIncrBy(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	key := string(args[0])
+	if len(key) == 0 {
+		return resp.MakeErrReply("key is empty")
+	}
 	value, err := db.getAsString(key)
 	if err != nil {
 		return resp.MakeErrReply(err.Error())
 	}
-	if value == nil {
-		db.PutEntity(key, new(commoninterface.DataEntity))
-		return resp.MakeIntReply(1)
-	}
+	entity := new(commoninterface.DataEntity)
+
 	intValue, parseErr := strconv.Atoi(string(value))
 	if parseErr != nil {
-		return resp.MakeErrReply(err.Error())
+		if value != nil && len(value) > 0 {
+			return resp.MakeErrReply(parseErr.Error())
+		}
+		intValue = 0
 	}
 	increment, parseErr := strconv.Atoi(string(args[1]))
 	if parseErr != nil {
-		return resp.MakeErrReply(err.Error())
+		return resp.MakeErrReply(parseErr.Error())
 	}
 	intValue += increment
-	db.PutEntity(key, new(commoninterface.DataEntity))
+	db.PutEntity(key, entity)
 	return resp.MakeIntReply(int64(intValue))
 }
 func execIncrByFloat(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
+	if len(args) != 2 {
+		return resp.MakeErrReply("wrong number of arguments for 'incrbyfloat' command")
+	}
 	key := string(args[0])
 	value, err := db.getAsString(key)
 	if err != nil {
 		return resp.MakeErrReply(err.Error())
 	}
-	if value == nil {
-		db.PutEntity(key, new(commoninterface.DataEntity))
-		return resp.MakeIntReply(1)
-	}
 	floatValue, parseErr := strconv.ParseFloat(string(value), 64)
 	if parseErr != nil {
-		return resp.MakeErrReply(err.Error())
+		if value != nil && len(value) > 0 {
+			return resp.MakeErrReply(parseErr.Error())
+		}
+		floatValue = 0
 	}
 	increment, parseErr := strconv.ParseFloat(string(args[1]), 64)
 	if parseErr != nil {
-		return resp.MakeErrReply(err.Error())
+		return resp.MakeErrReply(parseErr.Error())
 	}
 	floatValue += increment
 	db.PutEntity(key, new(commoninterface.DataEntity))
-	return resp.MakeIntReply(int64(floatValue))
+	return resp.MakeBulkReply([]byte(fmt.Sprintf("%g", floatValue)))
 }
 func execDecr(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	key := string(args[0])
@@ -442,7 +469,7 @@ func execDecr(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if err != nil {
 		return resp.MakeErrReply(err.Error())
 	}
-	if value == nil {
+	if value == nil || len(value) == 0 {
 		db.PutEntity(key, new(commoninterface.DataEntity))
 		return resp.MakeIntReply(-1)
 	}
@@ -460,7 +487,7 @@ func execDecrBy(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if err != nil {
 		return resp.MakeErrReply(err.Error())
 	}
-	if value == nil {
+	if value == nil || len(value) == 0 {
 		db.PutEntity(key, new(commoninterface.DataEntity))
 		return resp.MakeIntReply(-1)
 	}
@@ -470,7 +497,7 @@ func execDecrBy(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	}
 	decrement, parseErr := strconv.Atoi(string(args[1]))
 	if parseErr != nil {
-		return resp.MakeErrReply(err.Error())
+		return resp.MakeErrReply(parseErr.Error())
 	}
 	intValue -= decrement
 	db.PutEntity(key, new(commoninterface.DataEntity))
@@ -603,6 +630,9 @@ func execGetBit(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	value, err := db.getAsString(key)
 	if err != nil {
 		return resp.MakeErrReply(err.Error())
+	}
+	if value == nil || len(value) == 0 {
+		return resp.MakeIntReply(0)
 	}
 	offset, offsetErr := strconv.ParseInt(string(args[1]), 10, 64)
 	if offsetErr != nil {
