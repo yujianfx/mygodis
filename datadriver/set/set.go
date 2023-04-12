@@ -6,7 +6,7 @@ type Set struct {
 	dict dict.Dict
 }
 
-func Make(members ...string) *Set {
+func MakeSet(members ...string) *Set {
 	set := &Set{dict: dict.NewSimpleDict(4)}
 	for _, member := range members {
 		set.Add(member)
@@ -73,7 +73,7 @@ func (s *Set) IsSubset(another *Set) bool {
 	return ret
 }
 func (s *Set) Union(another *Set) *Set {
-	union := Make()
+	union := MakeSet()
 	s.ForEach(func(elem string) bool {
 		union.Add(elem)
 		return true
@@ -85,7 +85,7 @@ func (s *Set) Union(another *Set) *Set {
 	return union
 }
 func (s *Set) Diff(another *Set) *Set {
-	diff := Make()
+	diff := MakeSet()
 	s.ForEach(func(elem string) bool {
 		if !another.Has(elem) {
 			diff.Add(elem)
@@ -95,7 +95,7 @@ func (s *Set) Diff(another *Set) *Set {
 	return diff
 }
 func (s *Set) Inter(another *Set) *Set {
-	inter := Make()
+	inter := MakeSet()
 	s.ForEach(func(elem string) bool {
 		if another.Has(elem) {
 			inter.Add(elem)
@@ -106,4 +106,7 @@ func (s *Set) Inter(another *Set) *Set {
 }
 func (s *Set) RandomMembers(limit int) []string {
 	return s.dict.RandomKeys(limit)
+}
+func (s *Set) RandomDistinctMembers(limit int) []string {
+	return s.dict.RandomDistinctKeys(limit)
 }

@@ -35,7 +35,6 @@ type Payload struct {
 type Listener interface {
 	Callback([]cm.CmdLine)
 }
-
 type Persister struct {
 	ctx               context.Context
 	clFunc            context.CancelFunc

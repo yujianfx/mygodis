@@ -50,8 +50,7 @@ func (f *FakeConnection) GetChannels() []string {
 }
 
 func (f *FakeConnection) InMultiState() bool {
-	//TODO implement me
-	panic("implement me")
+	return false
 }
 
 func (f *FakeConnection) SetMultiState(b bool) {

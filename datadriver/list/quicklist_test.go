@@ -80,3 +80,36 @@ func TestQuickList_Contains(t *testing.T) {
 		}))
 	})
 }
+
+func TestQuickList_Remove(t *testing.T) {
+	ql := NewQuickList()
+	for i := 0; i < 10; i++ {
+		ql.Add(i)
+	}
+	fmt.Println("#################################")
+	t.Run("test_remove head", func(t *testing.T) {
+		ql.Remove(0)
+		ql.ForEach(func(i int, val any) bool {
+			fmt.Printf("index: %d, val: %d\n", i, val.(int))
+			return true
+		})
+	})
+	fmt.Println("#################################")
+	t.Run("test_remove tail", func(t *testing.T) {
+		ql.Remove(ql.Len() - 1)
+		ql.ForEach(func(i int, val any) bool {
+			fmt.Printf("index: %d, val: %d\n", i, val.(int))
+			return true
+		})
+	})
+}
+
+func TestQuickList_Len(t *testing.T) {
+	ql := NewQuickList()
+	for i := 0; i < 10; i++ {
+		ql.Add(i)
+	}
+	t.Run("test_len", func(t *testing.T) {
+		fmt.Printf("len: %d\n", ql.Len())
+	})
+}

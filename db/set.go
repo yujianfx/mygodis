@@ -5,6 +5,7 @@ import (
 	"mygodis/common/commoninterface"
 	"mygodis/datadriver/set"
 	"mygodis/resp"
+	"mygodis/util/cmdutil"
 	"strconv"
 )
 
@@ -23,7 +24,7 @@ func (db *DataBaseImpl) getOrCreateSet(key string) (result *set.Set, isNew bool)
 	entity, exists := db.GetEntity(key)
 	if !exists {
 		entity = new(commoninterface.DataEntity)
-		entity.Data = set.Make()
+		entity.Data = set.MakeSet()
 
 		return entity.Data.(*set.Set), true
 	}
@@ -50,6 +51,7 @@ func execSAdd(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 			Data: set,
 		})
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("sadd", args...))
 	return resp.MakeIntReply(int64(added))
 }
 func execSCard(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
@@ -73,14 +75,14 @@ func execSDiff(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 	sets := make([]*set.Set, 0, len(args))
 	for _, arg := range args {
 		key := string(arg)
-		set, err := db.getAsSet(key)
+		getAsSet, err := db.getAsSet(key)
 		if err != nil {
 			return err
 		}
-		if set == nil {
+		if getAsSet == nil {
 			return resp.MakeMultiBulkReply(nil)
 		}
-		sets = append(sets, set)
+		sets = append(sets, getAsSet)
 	}
 	result := sets[0]
 	for i := 1; i < len(sets); i++ {
@@ -119,7 +121,7 @@ func execSDiffStore(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 	db.PutEntity(destKey, &commoninterface.DataEntity{
 		Data: result,
 	})
-
+	db.addAof(cmdutil.ToCmdLineWithBytes("sdiffstore", args...))
 	return resp.MakeIntReply(int64(result.Len()))
 }
 func execSInter(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
@@ -129,14 +131,14 @@ func execSInter(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 	sets := make([]*set.Set, 0, len(args))
 	for _, arg := range args {
 		key := string(arg)
-		set, err := db.getAsSet(key)
+		getAsSet, err := db.getAsSet(key)
 		if err != nil {
 			return err
 		}
-		if set == nil {
+		if getAsSet == nil {
 			return resp.MakeMultiBulkReply(nil)
 		}
-		sets = append(sets, set)
+		sets = append(sets, getAsSet)
 	}
 	result := sets[0]
 	for i := 1; i < len(sets); i++ {
@@ -175,7 +177,7 @@ func execSInterStore(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 	db.PutEntity(destKey, &commoninterface.DataEntity{
 		Data: result,
 	})
-
+	db.addAof(cmdutil.ToCmdLineWithBytes("sinterstore", args...))
 	return resp.MakeIntReply(int64(result.Len()))
 }
 func execSIsMember(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
@@ -207,7 +209,7 @@ func execSMembers(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 		return err
 	}
 	if set == nil {
-		return resp.MakeMultiBulkReply(nil)
+		return resp.MakeMultiBulkReply([][]byte{})
 	}
 
 	slice := set.ToSlice()
@@ -243,6 +245,7 @@ func execSMove(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 		}
 		return resp.MakeIntReply(1)
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("smove", args...))
 	return resp.MakeIntReply(0)
 }
 func execSPop(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
@@ -252,9 +255,22 @@ func execSPop(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 		return err
 	}
 	if set == nil {
-		return resp.MakeMultiBulkReply(nil)
+		return resp.MakeNullBulkReply()
 	}
-	limit := -1
+	limit := 0
+	if len(args) == 1 {
+		limit = 1
+		member := set.RandomMembers(limit)
+		if member == nil {
+			return resp.MakeNullBulkReply()
+		}
+		elem := member[0]
+		remove := set.Remove(elem)
+		if remove > 0 {
+			return resp.MakeBulkReply([]byte(elem))
+		}
+		return resp.MakeNullBulkReply()
+	}
 	if len(args) == 2 {
 		i, err := strconv.Atoi(string(args[1]))
 		if err != nil {
@@ -262,15 +278,16 @@ func execSPop(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 		}
 		limit = i
 	}
-	member := set.RandomMembers(limit)
-	if member == nil {
-		return resp.MakeMultiBulkReply(nil)
+	randomMembers := set.RandomMembers(limit)
+	if randomMembers == nil {
+		return resp.MakeNullBulkReply()
 	}
-	r := make([][]byte, len(member))
-	for i := 0; i < len(member); i++ {
-		set.Remove(member[i])
-		r[i] = []byte(member[i])
+	r := make([][]byte, len(randomMembers))
+	for i := 0; i < len(randomMembers); i++ {
+		set.Remove(randomMembers[i])
+		r[i] = []byte(randomMembers[i])
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("spop", args...))
 	return resp.MakeMultiBulkReply(r)
 }
 func execSRandMember(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
@@ -320,6 +337,7 @@ func execSRem(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 			count++
 		}
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("srem", args...))
 	return resp.MakeIntReply(int64(count))
 }
 func execSUnion(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
@@ -380,6 +398,7 @@ func execSUnionStore(db *DataBaseImpl, args cm.CmdLine) (reply resp.Reply) {
 			Data: dest,
 		})
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("sunionstore", args...))
 	return resp.MakeIntReply(int64(len(slice)))
 }
 
@@ -408,18 +427,18 @@ func undoSRemCommands(db *DataBaseImpl, args cm.CmdLine) (undo []cm.CmdLine) {
 	return rollbackSetMember(db, string(args[0]), members...)
 }
 func init() {
-	RegisterCommand("scard", execSCard, readFirstKey, nil, 1, ReadOnly)
-	RegisterCommand("sdiff", execSDiff, readAllKeys, nil, -2, ReadOnly)
+	RegisterCommand("scard", execSCard, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("sdiff", execSDiff, readAllKeys, nil, -3, ReadOnly)
 	RegisterCommand("sinter", execSInter, readAllKeys, nil, -3, ReadOnly)
-	RegisterCommand("sismember", execSIsMember, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("smembers", execSMembers, readFirstKey, nil, 1, ReadOnly)
-	RegisterCommand("srandmember", execSRandMember, readFirstKey, nil, 1, ReadOnly)
-	RegisterCommand("sunion", execSUnion, readAllKeys, nil, -2, ReadOnly)
-	RegisterCommand("sadd", execSAdd, writeFirstKey, undoSAddCommands, -2, Write)
+	RegisterCommand("sismember", execSIsMember, readFirstKey, nil, 3, ReadOnly)
+	RegisterCommand("smembers", execSMembers, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("srandmember", execSRandMember, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("sunion", execSUnion, readAllKeys, nil, -3, ReadOnly)
+	RegisterCommand("sadd", execSAdd, writeFirstKey, undoSAddCommands, -3, Write)
 	RegisterCommand("sdiffstore", execSDiffStore, writeFirstKey, rollbackFirstKey, -3, Write)
 	RegisterCommand("sinterstore", execSInterStore, writeFirstKey, rollbackFirstKey, -3, Write)
 	RegisterCommand("smove", execSMove, writeFirstKey, undoSMoveCommands, 3, Write)
-	RegisterCommand("spop", execSPop, writeFirstKey, rollbackFirstKey, 1, Write)
+	RegisterCommand("spop", execSPop, writeFirstKey, rollbackFirstKey, 2, Write)
 	RegisterCommand("srem", execSRem, writeFirstKey, undoSRemCommands, -2, Write)
 	RegisterCommand("sunionstore", execSUnionStore, writeFirstKey, rollbackFirstKey, -3, Write)
 

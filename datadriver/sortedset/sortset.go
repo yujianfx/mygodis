@@ -117,53 +117,12 @@ func (zSet *ZSet) Range(start, end int64, desc bool) (result []*Element) {
 	return result
 }
 func (zSet *ZSet) Count(min, max *ScoreBorder) int64 {
-	if min == nil || max == nil || min.Value > max.Value {
-		return 0
-	}
-	count := int64(0)
-	minNode := zSet.zsl.getFirstInScoreRange(min, max)
-	maxNode := zSet.zsl.getLastInScoreRange(min, max)
-	if minNode == nil || maxNode == nil {
-		return 0
-	}
-	for node := minNode; node != nil && node != maxNode; node = node.level[0].forward {
-		count++
-	}
-	return count
+	return zSet.zsl.count(min, max)
 }
 func (zSet *ZSet) ForeachByScore(min, max *ScoreBorder, offset, limit int64, desc bool, consumer func(element *Element) bool) {
-	minNode := zSet.zsl.getFirstInScoreRange(min, max)
-	maxNode := zSet.zsl.getLastInScoreRange(min, max)
-	count := int64(0)
-	if minNode == nil || maxNode == nil {
-		return
-	}
-	if desc {
-		minNode, maxNode = maxNode, minNode
-	}
-	for minNode != nil && offset > 0 {
-		if desc {
-			minNode = minNode.backward
-		} else {
-			minNode = minNode.level[0].forward
-		}
-		offset--
-	}
-	for minNode != nil && minNode != maxNode && count < limit {
-		if !consumer(&Element{
-			Member: minNode.elem.Member,
-			Score:  minNode.elem.Score,
-		}) {
-			break
-		}
-		count++
-		if desc {
-			minNode = minNode.backward
-		} else {
-			minNode = minNode.level[0].forward
-		}
-	}
+
 }
+
 func (zSet *ZSet) RangeByScore(min, max *ScoreBorder, offset, limit int64, desc bool) (result []Element) {
 	if min.Value > max.Value {
 		return nil
@@ -176,11 +135,11 @@ func (zSet *ZSet) RangeByScore(min, max *ScoreBorder, offset, limit int64, desc 
 	return result
 }
 func (zSet *ZSet) RemoveByScore(min, max *ScoreBorder) int64 {
-	result := zSet.zsl.reMoveRangeByScore(min, max, 0)
-	for _, v := range result {
+	elements := zSet.zsl.reMoveRangeByBorder(min, max, zSet.Len())
+	for _, v := range elements {
 		delete(zSet.dict, v.Member)
 	}
-	return int64(len(result))
+	return int64(len(elements))
 
 }
 func (zSet *ZSet) PopMin(count int64) []*Element {
@@ -266,14 +225,12 @@ func (zSet *ZSet) Diff(sets ...*ZSet) (result *ZSet) {
 	}
 	return diffSets(zsww)
 }
-
 func (zSet *ZSet) Rank(member string) (int64, bool) {
 	if element, ok := zSet.Get(member); ok {
 		return zSet.zsl.getIndex(member, element.Score), true
 	}
 	return -1, false
 }
-
 func (zSet *ZSet) LexCount(min string, max string) int64 {
 
 	maxE, _ := zSet.Get(max)

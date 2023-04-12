@@ -2,8 +2,9 @@ package list
 
 import "container/list"
 
-const PAGE_SIZE = 256
+const PAGE_SIZE = 16
 
+// todo 有bug
 type QuickList struct {
 	data *list.List
 	size int
@@ -112,7 +113,6 @@ func (ql *QuickList) Remove(index int) (val any) {
 	if index < 0 || index >= ql.size {
 		panic("index out of bound")
 	}
-	ql.size--
 	var n *list.Element
 	var page []any
 	var pageBeg int
@@ -125,6 +125,7 @@ func (ql *QuickList) Remove(index int) (val any) {
 				val = page[index-pageBeg]
 				copy(page[index-pageBeg:], page[index-pageBeg+1:])
 				page = page[:len(page)-1]
+				ql.size--
 				n.Value = page
 				if len(page) == 0 {
 					ql.data.Remove(n)
@@ -143,6 +144,7 @@ func (ql *QuickList) Remove(index int) (val any) {
 			val = page[index-pageBeg+len(page)]
 			copy(page[index-pageBeg+len(page):], page[index-pageBeg+len(page)+1:])
 			page = page[:len(page)-1]
+			ql.size--
 			n.Value = page
 			if len(page) == 0 {
 				ql.data.Remove(n)

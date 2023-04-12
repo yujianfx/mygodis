@@ -2,6 +2,7 @@ package db
 
 import (
 	cm "mygodis/common"
+	"mygodis/common/commoninterface"
 	"mygodis/datadriver/dict"
 	"mygodis/resp"
 	"mygodis/util/cmdutil"
@@ -54,11 +55,19 @@ func execHSet(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	field := args[1]
 	value := args[2]
 	d, isNew := db.getOrCreateAsHash(string(key))
+	_, exists := d.Get(string(field))
 	d.Put(string(field), string(value))
-	if isNew {
-		return resp.MakeIntReply(1)
+	if exists {
+		return resp.MakeIntReply(0)
 	}
-	return resp.MakeIntReply(0)
+	if isNew {
+		data := new(commoninterface.DataEntity)
+		data.Data = d
+		db.PutEntity(string(key), data)
+	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("hset", key, field, value))
+	return resp.MakeIntReply(1)
+
 }
 func execHMSet(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if len(args) < 3 || len(args)%2 == 0 {
@@ -72,9 +81,12 @@ func execHMSet(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 		d.Put(string(field), string(value))
 	}
 	if isNew {
-		return resp.MakeIntReply(1)
+		data := new(commoninterface.DataEntity)
+		data.Data = d
+		db.PutEntity(string(key), data)
 	}
-	return resp.MakeIntReply(0)
+	db.addAof(cmdutil.ToCmdLineWithBytes("hmset", args...))
+	return resp.MakeOkReply()
 }
 func execHMGet(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if len(args) < 2 {
@@ -139,6 +151,7 @@ func execHDel(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 			count++
 		}
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("hdel", args...))
 	return resp.MakeIntReply(count)
 }
 func execHExists(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
@@ -183,6 +196,7 @@ func execHIncrBy(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if isNew {
 		return resp.MakeIntReply(delta)
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("hincrby", args...))
 	return resp.MakeIntReply(v)
 }
 func execHIncrByFloat(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
@@ -209,6 +223,7 @@ func execHIncrByFloat(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if isNew {
 		return resp.MakeBulkReply([]byte(strconv.FormatFloat(delta, 'f', -1, 64)))
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("hincrbyfloat", args...))
 	return resp.MakeBulkReply([]byte(strconv.FormatFloat(v, 'f', -1, 64)))
 }
 func execHKeys(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
@@ -257,9 +272,12 @@ func execHSetNx(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	}
 	d.Put(string(field), string(value))
 	if isNew {
-		return resp.MakeIntReply(1)
+		data := new(commoninterface.DataEntity)
+		data.Data = d
+		db.PutEntity(string(key), data)
 	}
-	return resp.MakeIntReply(0)
+	return resp.MakeIntReply(1)
+
 }
 func execHVals(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if len(args) != 1 {

@@ -9,15 +9,18 @@ import (
 type DataEntity struct {
 	Data any
 }
+
+func DataEntityWithData(data any) *DataEntity {
+	d := new(DataEntity)
+	d.Data = data
+	return d
+}
+
 type KeyEventCallback func(dbIndex int, key string, entity *DataEntity)
 type DB interface {
 	Exec(connection Connection, args cm.CmdLine) (reply resp.Reply)
 	AfterClientClose(connection Connection)
 	Close()
-}
-type StandaloneDBManage interface {
-	FlushDB(dbIndex int) DB
-	FlushAll()
 }
 type StandaloneDBEngine interface {
 	DB

@@ -8,6 +8,7 @@ type List interface {
 	Set(index int, val any)
 	Insert(index int, val any)
 	Remove(index int) (val any)
+	RemoveBatch(start int, stop int) []any
 	RemoveLast() (val any)
 	RemoveAllByVal(expected Expected) int
 	RemoveByVal(expected Expected, count int) int

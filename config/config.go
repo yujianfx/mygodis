@@ -39,7 +39,7 @@ func init() {
 	Properties = &ServerProperties{
 		Bind:       "127.0.0.1",
 		Port:       6379,
-		AppendOnly: false,
+		AppendOnly: true,
 	}
 }
 func parse(src io.Reader) *ServerProperties {

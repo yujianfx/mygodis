@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"mygodis/aof"
 	cm "mygodis/common"
 	"mygodis/common/commoninterface"
 	"mygodis/datadriver/dict"
@@ -9,6 +10,7 @@ import (
 	"mygodis/lib/sync/lockermap"
 	logger "mygodis/log"
 	"mygodis/resp"
+	"mygodis/util/cmdutil"
 	"strings"
 	"time"
 )
@@ -76,8 +78,7 @@ func newBasicDB() *DataBaseImpl {
 		data:       dict.NewConcurrentDict(),
 		ttlMap:     dict.NewSimpleDict(ttlDictSize),
 		versionMap: dict.NewSimpleDict(dataDictSize),
-		//locker:     lock.Make(lockerSize),
-		addAof: func(line cm.CmdLine) {},
+		addAof:     func(line cm.CmdLine) {},
 	}
 	return db
 }
@@ -176,6 +177,7 @@ func (dbi *DataBaseImpl) Flush() {
 	dbi.data.Clear()
 	dbi.ttlMap.Clear()
 	dbi.versionMap.Clear()
+	dbi.addAof(cmdutil.ToCmdLine("flushdb"))
 }
 func (dbi *DataBaseImpl) Expire(key string, ttl time.Time) {
 	dbi.ttlMap.Put(key, ttl)
@@ -188,11 +190,13 @@ func (dbi *DataBaseImpl) Expire(key string, ttl time.Time) {
 		}
 		dbi.Remove(key)
 	})
+	dbi.addAof(aof.ExpireToCmd(key, ttl).Args)
 }
 func (dbi *DataBaseImpl) Persist(key string) {
 	dbi.ttlMap.Remove(key)
 	taskKey := expireTaskKey(key)
 	delay.Cancel(taskKey)
+	dbi.addAof(cmdutil.ToCmdLine("persist", key))
 }
 func (dbi *DataBaseImpl) IsExpire(key string) bool {
 	expireTime, exists := dbi.ttlMap.Get(key)

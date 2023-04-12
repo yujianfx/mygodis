@@ -507,7 +507,6 @@ func undoZIncrByCommands(db *DataBaseImpl, args cm.CmdLine) []cm.CmdLine {
 	zsetMembers := getZsetMember(args[1:])
 	return rollbackZsetMember(db, key, zsetMembers...)
 }
-
 func getZsetMember(args cm.CmdLine) []string {
 	var members []string
 	for i := 1; i < len(args); i += 2 {
@@ -515,24 +514,26 @@ func getZsetMember(args cm.CmdLine) []string {
 	}
 	return members
 }
-func init() {
-	RegisterCommand("zlexcount", execZLexCount, readFirstKey, nil, 3, ReadOnly)
-	RegisterCommand("zrange", execZRange, readFirstKey, nil, -3, ReadOnly)
-	RegisterCommand("zcard", execZCard, readFirstKey, nil, 1, ReadOnly)
-	RegisterCommand("zcount", execZCount, readFirstKey, nil, 3, ReadOnly)
-	RegisterCommand("zrank", execZRank, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("zrevrank", execZRevRank, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("zinter", execZInter, readFirstKey, nil, -3, ReadOnly)
-	RegisterCommand("zunion", execZUnion, readFirstKey, nil, -3, ReadOnly)
-	RegisterCommand("zdiff", execZDiff, readFirstKey, nil, -3, ReadOnly)
-	RegisterCommand("zintercard", execZInterCard, readFirstKey, nil, -3, ReadOnly)
-	RegisterCommand("zscore", execZScore, readFirstKey, nil, 2, ReadOnly)
 
-	RegisterCommand("zadd", execZAdd, writeFirstKey, undoZAddCommands, -2, Write)
-	RegisterCommand("zincrby", execZIncrBy, writeFirstKey, undoZIncrByCommands, 3, Write)
-	RegisterCommand("zrem", execZRem, writeFirstKey, undoZRemCommands, -2, Write)
-	RegisterCommand("zinterstore", execZInterStore, writeFirstKey, rollbackFirstKey, -3, Write)
-	RegisterCommand("zunionstore", execZUnionStore, writeFirstKey, rollbackFirstKey, -3, Write)
-	RegisterCommand("zdiffstore", execZDiffStore, writeFirstKey, rollbackFirstKey, -3, Write)
-	RegisterCommand("zrangestore", execZRangeStore, writeFirstKey, rollbackFirstKey, -3, Write)
+// todo support zset
+func init() {
+	//RegisterCommand("zlexcount", execZLexCount, readFirstKey, nil, 3, ReadOnly)
+	//RegisterCommand("zrange", execZRange, readFirstKey, nil, -3, ReadOnly)
+	//RegisterCommand("zcard", execZCard, readFirstKey, nil, 1, ReadOnly)
+	//RegisterCommand("zcount", execZCount, readFirstKey, nil, 3, ReadOnly)
+	//RegisterCommand("zrank", execZRank, readFirstKey, nil, 2, ReadOnly)
+	//RegisterCommand("zrevrank", execZRevRank, readFirstKey, nil, 2, ReadOnly)
+	//RegisterCommand("zinter", execZInter, readFirstKey, nil, -3, ReadOnly)
+	//RegisterCommand("zunion", execZUnion, readFirstKey, nil, -3, ReadOnly)
+	//RegisterCommand("zdiff", execZDiff, readFirstKey, nil, -3, ReadOnly)
+	//RegisterCommand("zintercard", execZInterCard, readFirstKey, nil, -3, ReadOnly)
+	//RegisterCommand("zscore", execZScore, readFirstKey, nil, 2, ReadOnly)
+	//
+	//RegisterCommand("zadd", execZAdd, writeFirstKey, undoZAddCommands, -2, Write)
+	//RegisterCommand("zincrby", execZIncrBy, writeFirstKey, undoZIncrByCommands, 3, Write)
+	//RegisterCommand("zrem", execZRem, writeFirstKey, undoZRemCommands, -2, Write)
+	//RegisterCommand("zinterstore", execZInterStore, writeFirstKey, rollbackFirstKey, -3, Write)
+	//RegisterCommand("zunionstore", execZUnionStore, writeFirstKey, rollbackFirstKey, -3, Write)
+	//RegisterCommand("zdiffstore", execZDiffStore, writeFirstKey, rollbackFirstKey, -3, Write)
+	//RegisterCommand("zrangestore", execZRangeStore, writeFirstKey, rollbackFirstKey, -3, Write)
 }

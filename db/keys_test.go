@@ -34,7 +34,7 @@ func randData(limit int) (result []struct {
 		case 1:
 			data = commoninterface.DataEntity{Data: list.New()}
 		case 2:
-			data = commoninterface.DataEntity{Data: set.Make()}
+			data = commoninterface.DataEntity{Data: set.MakeSet()}
 		case 3:
 			data = commoninterface.DataEntity{Data: sortedset.MakeZSet()}
 		case 4:

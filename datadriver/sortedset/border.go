@@ -16,6 +16,28 @@ type ScoreBorder struct {
 	Exclude bool
 }
 
+func (border *ScoreBorder) greaterThan(value float64) bool {
+	if border.Inf == negativeInf {
+		return false
+	} else if border.Inf == positiveInf {
+		return true
+	}
+	if border.Exclude {
+		return border.Value >= value
+	}
+	return border.Value > value
+}
+func (border *ScoreBorder) lessThan(value float64) bool {
+	if border.Inf == negativeInf {
+		return true
+	} else if border.Inf == positiveInf {
+		return false
+	}
+	if border.Exclude {
+		return border.Value <= value
+	}
+	return border.Value < value
+}
 func (border *ScoreBorder) greater(value float64) bool {
 	if border.Inf == negativeInf {
 		return false
@@ -64,6 +86,9 @@ func ParseScoreBorder(s string) (*ScoreBorder, error) {
 			Value:   value,
 			Exclude: true,
 		}, nil
+	}
+	if s[0] == '[' {
+		s = s[1:]
 	}
 	value, err := strconv.ParseFloat(s, 64)
 	if err != nil {

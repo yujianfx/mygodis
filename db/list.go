@@ -26,7 +26,7 @@ func getOrCreateList(d *DataBaseImpl, key string) (result list.List, isCreated b
 			return list, false
 		}
 	}
-	quickList := list.NewQuickList()
+	quickList := list.NewLikedList()
 	data := new(commoninterface.DataEntity)
 	data.Data = quickList
 	d.PutEntity(key, data)
@@ -54,7 +54,15 @@ func execLIndex(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if index < 0 || index >= list.Len() {
 		return resp.MakeNullBulkReply()
 	}
-	return resp.MakeBulkReply(list.Get(index).([]byte))
+	val := list.Get(index)
+	switch val.(type) {
+	case string:
+		return resp.MakeBulkReply([]byte(val.(string)))
+	case []byte:
+		return resp.MakeBulkReply(val.([]byte))
+	default:
+		return resp.MakeErrReply(fmt.Sprintf("unknown type %T", val))
+	}
 }
 func execLLen(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if len(args) != 1 {
@@ -83,7 +91,15 @@ func execLPop(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 		return resp.MakeNullBulkReply()
 	}
 	val := list.Remove(0)
-	return resp.MakeBulkReply(val.([]byte))
+	db.addAof(cmdutil.ToCmdLine("lpop", key))
+	switch val.(type) {
+	case string:
+		return resp.MakeBulkReply([]byte(val.(string)))
+	case []byte:
+		return resp.MakeBulkReply(val.([]byte))
+	default:
+		return resp.MakeErrReply(fmt.Sprintf("unknown type %T", val))
+	}
 }
 func execLPush(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if len(args) < 2 {
@@ -97,8 +113,10 @@ func execLPush(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if isCreated {
 		db.PutEntity(key, &commoninterface.DataEntity{Data: list})
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("lpush", args...))
 	return resp.MakeIntReply(int64(list.Len()))
 }
+
 func execLPushX(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if len(args) != 2 {
 		return resp.MakeErrReply("wrong number of arguments for 'lpushx' command")
@@ -112,6 +130,7 @@ func execLPushX(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 		return resp.MakeIntReply(0)
 	}
 	list.Add(args[1])
+	db.addAof(cmdutil.ToCmdLineWithBytes("lpushx", args...))
 	return resp.MakeIntReply(int64(list.Len()))
 }
 func execLRange(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
@@ -151,7 +170,13 @@ func execLRange(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	}
 	result := make([][]byte, 0, stop-start+1)
 	for i := start; i <= stop; i++ {
-		result = append(result, list.Get(i).([]byte))
+		val := list.Get(i)
+		switch val.(type) {
+		case string:
+			result = append(result, []byte(val.(string)))
+		case []byte:
+			result = append(result, val.([]byte))
+		}
 	}
 	return resp.MakeMultiBulkReply(result)
 }
@@ -171,31 +196,18 @@ func execLRem(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if list == nil {
 		return resp.MakeIntReply(0)
 	}
-	if count == 0 {
+	if count <= 0 {
 		return resp.MakeIntReply(0)
 	}
-	if count > 0 {
-		for i := 0; i < list.Len(); i++ {
-			if bytes.Equal(list.Get(i).([]byte), args[2]) {
-				list.Remove(i)
-				count--
-				if count == 0 {
-					break
-				}
-			}
+	result := list.RemoveByVal(func(a any) bool {
+		i := a.([]byte)
+		if bytes.Equal(i, args[2]) {
+			return true
 		}
-	} else {
-		for i := list.Len() - 1; i >= 0; i-- {
-			if bytes.Equal(list.Get(i).([]byte), args[2]) {
-				list.Remove(i)
-				count++
-				if count == 0 {
-					break
-				}
-			}
-		}
-	}
-	return resp.MakeIntReply(int64(list.Len()))
+		return false
+	}, count)
+	db.addAof(cmdutil.ToCmdLineWithBytes("lrem", args...))
+	return resp.MakeIntReply(int64(result))
 }
 func execLSet(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if len(args) != 3 {
@@ -220,6 +232,7 @@ func execLSet(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 		return resp.MakeErrReply("index out of range")
 	}
 	list.Set(index, args[2])
+	db.addAof(cmdutil.ToCmdLineWithBytes("lset", args...))
 	return resp.MakeOkReply()
 }
 func execRPop(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
@@ -235,6 +248,7 @@ func execRPop(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 		return resp.MakeNullBulkReply()
 	}
 	val := list.Remove(list.Len() - 1)
+	db.addAof(cmdutil.ToCmdLineWithBytes("rpop", args...))
 	return resp.MakeBulkReply(val.([]byte))
 }
 func execRPopLPush(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
@@ -256,6 +270,7 @@ func execRPopLPush(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if isCreated {
 		db.PutEntity(dstKey, &commoninterface.DataEntity{Data: dstList})
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("rpoplpush", args...))
 	return resp.MakeBulkReply(val.([]byte))
 }
 func execRPush(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
@@ -270,6 +285,7 @@ func execRPush(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if isCreated {
 		db.PutEntity(key, &commoninterface.DataEntity{Data: list})
 	}
+	db.addAof(cmdutil.ToCmdLineWithBytes("rpush", args...))
 	return resp.MakeIntReply(int64(list.Len()))
 }
 func execRPushX(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
@@ -285,8 +301,10 @@ func execRPushX(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 		return resp.MakeIntReply(0)
 	}
 	list.Add(args[1])
+	db.addAof(cmdutil.ToCmdLineWithBytes("rpushx", args...))
 	return resp.MakeIntReply(int64(list.Len()))
 }
+
 func execLTrim(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if len(args) != 3 {
 		return resp.MakeErrReply("wrong number of arguments for 'ltrim' command")
@@ -325,12 +343,8 @@ func execLTrim(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 		})
 		return resp.MakeOkReply()
 	}
-	list.RemoveByVal(func(a any) bool {
-		return true
-	}, start)
-	list.ReverseRemoveByVal(func(a any) bool {
-		return true
-	}, list.Len()-stop)
+	list.RemoveBatch(start, stop)
+	db.addAof(cmdutil.ToCmdLineWithBytes("ltrim", args...))
 	return resp.MakeOkReply()
 }
 func undoLPopCommands(db *DataBaseImpl, args cm.CmdLine) []cm.CmdLine {
@@ -460,17 +474,17 @@ func preparePopPush(args cm.CmdLine) (writeKeys []string, readKeys []string) {
 	return writeKeys, readKeys
 }
 func init() {
-	RegisterCommand("lindex", execLIndex, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("llen", execLLen, readFirstKey, nil, 1, ReadOnly)
-	RegisterCommand("lrange", execLRange, readFirstKey, nil, 3, ReadOnly)
-	RegisterCommand("lpop", execLPop, writeFirstKey, undoLPopCommands, 1, Write)
-	RegisterCommand("lpush", execLPush, writeFirstKey, undoLPushCommands, -2, Write)
-	RegisterCommand("lpushx", execLPushX, writeFirstKey, undoLPushXCommands, 2, Write)
-	RegisterCommand("lrem", execLRem, writeFirstKey, undoLtrimCommands, 3, Write)
-	RegisterCommand("lset", execLSet, writeFirstKey, rollbackFirstKey, 3, Write)
-	RegisterCommand("ltrim", execLTrim, writeFirstKey, rollbackFirstKey, 3, Write)
-	RegisterCommand("rpop", execRPop, writeFirstKey, undoRPopCommands, 1, Write)
-	RegisterCommand("rpoplpush", execRPopLPush, preparePopPush, undoRPopLPushCommands, 2, Write)
+	RegisterCommand("lindex", execLIndex, readFirstKey, nil, 3, ReadOnly)
+	RegisterCommand("llen", execLLen, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("lrange", execLRange, readFirstKey, nil, 4, ReadOnly)
+	RegisterCommand("lpop", execLPop, writeFirstKey, undoLPopCommands, 2, Write)
+	RegisterCommand("lpush", execLPush, writeFirstKey, undoLPushCommands, -3, Write)
+	RegisterCommand("lpushx", execLPushX, writeFirstKey, undoLPushXCommands, 3, Write)
+	RegisterCommand("lrem", execLRem, writeFirstKey, undoLtrimCommands, 4, Write)
+	RegisterCommand("lset", execLSet, writeFirstKey, rollbackFirstKey, 4, Write)
+	RegisterCommand("ltrim", execLTrim, writeFirstKey, rollbackFirstKey, 4, Write)
+	RegisterCommand("rpop", execRPop, writeFirstKey, undoRPopCommands, 2, Write)
+	RegisterCommand("rpoplpush", execRPopLPush, preparePopPush, undoRPopLPushCommands, 3, Write)
 	RegisterCommand("rpush", execRPush, writeFirstKey, undoRPushCommands, -3, Write)
 	RegisterCommand("rpushx", execRPushX, writeFirstKey, undoRPushXCommands, -3, Write)
 

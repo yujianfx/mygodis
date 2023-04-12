@@ -46,7 +46,6 @@ func execExists(db *DataBaseImpl, cmd cm.CmdLine) resp.Reply {
 }
 func execFlushDB(db *DataBaseImpl, line cm.CmdLine) resp.Reply {
 	db.Flush()
-	db.addAof(cmdutil.ToCmdLine("flushdb"))
 	return resp.MakeOkReply()
 }
 func execType(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
@@ -214,7 +213,7 @@ func execPersist(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	db.addAof(cmdutil.ToCmdLine("persist", key))
 	return resp.MakeIntReply(1)
 }
-func execCopy(manage *StandaloneDatabaseManager, connection commoninterface.Connection, line cm.CmdLine) resp.Reply {
+func execCopy(manage *StandaloneServer, connection commoninterface.Connection, line cm.CmdLine) resp.Reply {
 	dbIndex := connection.GetDBIndex()
 	db := manage.selectDB(dbIndex)
 	src := string(line[0])
@@ -310,4 +309,5 @@ func init() {
 	RegisterCommand("persist", execPersist, writeFirstKey, nil, 2, Write)
 	RegisterCommand("rename", execRename, prepareRename, undoRenameCommands, 3, Write)
 	RegisterCommand("renamenx", execRenameNx, prepareRename, undoRenameCommands, 3, Write)
+	RegisterCommand("flushdb", execFlushDB, nil, nil, 1, Write)
 }

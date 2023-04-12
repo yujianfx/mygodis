@@ -66,9 +66,6 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 	for {
 		line, err := bufioReader.ReadBytes('\n')
 		if err != nil {
-			if err == io.EOF {
-				break
-			}
 			ch <- &Payload{
 				Err: err,
 			}
@@ -182,7 +179,6 @@ func parseArray(line []byte, reader *bufio.Reader, ch chan<- *Payload) error {
 		if rErr != nil || read != int(strLen+2) {
 			return rErr
 		}
-
 		results = append(results, payload[:strLen])
 	}
 	ch <- &Payload{

@@ -10,12 +10,10 @@ import (
 )
 
 var defaultProperties = &config.ServerProperties{
-	Bind:           "0.0.0.0",
-	Port:           6379,
-	AppendOnly:     false,
-	AppendFilename: "~/aof.aof",
-	MaxClients:     1024,
-	RDBFilename:    "~/dump.rdb",
+	Bind:       "0.0.0.0",
+	Port:       6379,
+	AppendOnly: false,
+	MaxClients: 1024,
 }
 
 func main() {

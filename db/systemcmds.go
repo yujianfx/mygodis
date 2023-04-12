@@ -5,6 +5,7 @@ import (
 	"mygodis/common/commoninterface"
 	"mygodis/config"
 	"mygodis/resp"
+	"mygodis/util/cmdutil"
 	"strconv"
 )
 
@@ -32,49 +33,22 @@ func isAuthenticated(c commoninterface.Connection) bool {
 	}
 	return c.GetPassword() == config.Properties.RequirePass
 }
-func Select(connection commoninterface.Connection, cmd common.CmdLine) resp.Reply {
+func Select(d *StandaloneServer, connection commoninterface.Connection, cmd common.CmdLine) resp.Reply {
 	if !isAuthenticated(connection) {
 		return resp.MakeErrReply("NOAUTH Authentication required.")
 	}
 	if len(cmd) != 1 {
 		return resp.MakeErrReply("ERR wrong number of arguments for 'select' command")
 	}
-	dbIndex, err := strconv.Atoi(string(cmd[0]))
+	s := string(cmd[0])
+	dbIndex, err := strconv.Atoi(s)
 	if err != nil {
 		return resp.MakeErrReply("ERR value is not an integer ")
 	}
 	if dbIndex < 0 || dbIndex >= config.Properties.Databases {
 		return resp.MakeErrReply("ERR value is  out of range")
 	}
-	return resp.MakeOkReply()
-}
-func FlushDB(connection commoninterface.Connection, dbm commoninterface.StandaloneDBManage, cmd common.CmdLine) resp.Reply {
-	if !isAuthenticated(connection) {
-		return resp.MakeErrReply("NOAUTH Authentication required.")
-	}
-	if len(cmd) != 1 {
-		return resp.MakeErrReply("ERR wrong number of arguments for 'flushdb' command")
-	}
-	dbIndex, err := strconv.Atoi(string(cmd[0]))
-	if err != nil {
-		return resp.MakeErrReply("ERR value is not an integer ")
-	}
-	if dbIndex < 0 || dbIndex >= config.Properties.Databases {
-
-		return resp.MakeErrReply("ERR value is  out of range")
-	}
-	dbm.FlushDB(dbIndex)
-	dbm.FlushDB(dbIndex)
-	return resp.MakeOkReply()
-}
-func FlushAll(connection commoninterface.Connection, dbm commoninterface.StandaloneDBManage, cmd common.CmdLine) resp.Reply {
-	if !isAuthenticated(connection) {
-		return resp.MakeErrReply("NOAUTH Authentication required.")
-	}
-	if len(cmd) != 0 {
-		return resp.MakeErrReply("ERR wrong number of arguments for 'flushall' command")
-	}
-	dbm.FlushAll()
+	d.AddAof(dbIndex, cmdutil.ToCmdLineWithName("select", s))
 	return resp.MakeOkReply()
 }
 func Info(connection commoninterface.Connection, info commoninterface.DBInfo, cmd common.CmdLine) resp.Reply {

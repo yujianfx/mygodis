@@ -14,7 +14,7 @@ type node struct {
 
 func (l *LinkedList) Add(val any) {
 	if l == nil {
-		panic("list is nil")
+		l = NewLikedList()
 	}
 	n := &node{
 		val: val,
@@ -28,6 +28,9 @@ func (l *LinkedList) Add(val any) {
 		l.last = n
 	}
 	l.size++
+}
+func NewLikedList() *LinkedList {
+	return &LinkedList{}
 }
 
 func (l *LinkedList) find(index int) *node {
@@ -54,17 +57,18 @@ func (l *LinkedList) find(index int) *node {
 
 func (l *LinkedList) Get(index int) (val any) {
 	if l == nil {
-		panic("list is nil")
+		l = NewLikedList()
+		return nil
 	}
 	if index < 0 || index >= l.size {
-		panic("index out of bound")
+		return nil
 	}
 	return l.find(index).val
 }
 
 func (l *LinkedList) Set(index int, val any) {
 	if l == nil {
-		panic("list is nil")
+		l = NewLikedList()
 	}
 	if index < 0 || index >= l.size {
 		panic("index out of bound")
@@ -74,7 +78,7 @@ func (l *LinkedList) Set(index int, val any) {
 
 func (l *LinkedList) Insert(index int, val any) {
 	if l == nil {
-		panic("list is nil")
+		l = NewLikedList()
 	}
 	if index < 0 || index >= l.size {
 		panic("index out of bound")
@@ -103,10 +107,10 @@ func (l *LinkedList) Insert(index int, val any) {
 
 func (l *LinkedList) Remove(index int) (val any) {
 	if l == nil {
-		panic("list is nil")
+		l = NewLikedList()
 	}
 	if index < 0 || index >= l.size {
-		panic("index out of bound")
+		return nil
 	}
 	n := l.find(index)
 	if index == 0 {
@@ -292,7 +296,8 @@ func (l *LinkedList) Contains(expected Expected) bool {
 
 func (l *LinkedList) Range(start int, stop int) []any {
 	if l == nil {
-		return nil
+		l = NewLikedList()
+		return []any{}
 	}
 	if start < 0 {
 		start = 0
@@ -301,12 +306,51 @@ func (l *LinkedList) Range(start int, stop int) []any {
 		stop = l.size
 	}
 	if start >= stop {
-		return nil
+		return []any{}
 	}
 	r := make([]any, stop-start)
 	n := l.find(start)
 	for i := start; i < stop; i++ {
 		r[i-start] = n.val
+		n = n.next
+	}
+	return r
+}
+func (l *LinkedList) RemoveBatch(start int, stop int) []any {
+	if l == nil {
+		l = NewLikedList()
+		return []any{}
+	}
+	if start < 0 {
+		start = 0
+	}
+	if stop > l.size {
+		stop = l.size
+	}
+	if start >= stop {
+		return []any{}
+	}
+	r := make([]any, stop-start+1)
+	n := l.find(start)
+	for i := start; i <= stop; i++ {
+		r[i-start] = n.val
+		if n.prev == nil {
+			l.first = n.next
+			if l.first != nil {
+				l.first.prev = nil
+			}
+		} else if n.next == nil {
+			l.last = n.prev
+			if l.last != nil {
+				l.last.next = nil
+			}
+		} else {
+			prev := n.prev
+			next := n.next
+			prev.next = next
+			next.prev = prev
+		}
+		l.size--
 		n = n.next
 	}
 	return r

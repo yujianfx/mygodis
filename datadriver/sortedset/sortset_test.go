@@ -91,12 +91,12 @@ func TestZSet_Count(t *testing.T) {
 	set.Add("c", 3)
 	set.Add("d", 4)
 	min := &ScoreBorder{
-		Value:   -1,
+		Value:   1,
 		Exclude: true,
 	}
 	max := &ScoreBorder{
 		Value:   4,
-		Exclude: true,
+		Exclude: false,
 	}
 	fmt.Println(set.Count(min, max))
 }

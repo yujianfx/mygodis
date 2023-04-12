@@ -29,6 +29,12 @@ type zskiplist struct {
 	level  int16
 }
 
+func (z *zskiplist) hasInRange(min, max *ScoreBorder) bool {
+	if min == nil && max == nil || (min.Value == max.Value && min.Exclude == max.Exclude) || (z.tail == nil || min.greater(z.tail.elem.Score)) || (z.header == nil || max.less(z.header.elem.Score)) {
+		return false
+	}
+	return true
+}
 func makeSkipList() *zskiplist {
 	return &zskiplist{
 		level:  1,
@@ -222,45 +228,6 @@ func (z *zskiplist) getByIndex(index int64) *zskiplistNode {
 	}
 	return nil
 }
-func (z *zskiplist) hasInRange(min, max *ScoreBorder) bool {
-	if min == nil && max == nil || (min.Value == max.Value && min.Exclude == max.Exclude) || (z.tail == nil || min.greater(z.tail.elem.Score)) || (z.header == nil || max.less(z.header.elem.Score)) {
-		return false
-	}
-	return true
-}
-func (z *zskiplist) getFirstInScoreRange(min, max *ScoreBorder) *zskiplistNode {
-	if !z.hasInRange(min, max) {
-		return nil
-	}
-	x := z.header
-	var rank int
-	for i := z.level - 1; i >= 0; i-- {
-		for x.level[i].forward != nil &&
-			(x.level[i].forward.elem.Score < min.Value ||
-				(x.level[i].forward.elem.Score == min.Value && x.level[i].forward.elem.Score <= max.Value)) {
-			rank += int(x.level[i].span)
-			x = x.level[i].forward
-		}
-	}
-	if x != nil && x.elem.Score <= max.Value {
-		return x
-	} else {
-		return nil
-	}
-}
-func (z *zskiplist) getLastInScoreRange(min, max *ScoreBorder) *zskiplistNode {
-	if !z.hasInRange(min, max) {
-		return nil
-	}
-	if z.tail != nil && max.greater(z.tail.elem.Score) {
-		return z.tail
-	}
-	maxNode := z.getNodeIndexByScore(max.Value)
-	for maxNode.level[0].forward != nil && maxNode.elem.Score == max.Value {
-		maxNode = maxNode.level[0].forward
-	}
-	return maxNode
-}
 func (z *zskiplist) removeRangeByIndex(start, end int64) (result []*Element) {
 	if start < 0 || end < 0 || start > end {
 		return
@@ -297,32 +264,61 @@ func (z *zskiplist) getNodeIndexByScore(score float64) *zskiplistNode {
 	}
 	return x
 }
-func (z *zskiplist) reMoveRangeByScore(min, max *ScoreBorder, limit int64) (result []*Element) {
+
+func (z *zskiplist) reMoveRangeByBorder(min, max *ScoreBorder, limit int64) (result []*Element) {
 	if !z.hasInRange(min, max) {
 		return
 	}
-	x := z.header
-	var rank int
-	update := make([]*zskiplistNode, zslMaxLevel)
-	for i := z.level - 1; i >= 0; i-- {
-		for x.level[i].forward != nil &&
-			(x.level[i].forward.elem.Score < min.Value ||
-				(x.level[i].forward.elem.Score == min.Value && x.level[i].forward.elem.Score <= max.Value)) {
-			rank += int(x.level[i].span)
-			x = x.level[i].forward
-		}
-		update[i] = x
 
-	}
-	x = x.level[0].forward
-	for x != nil && x.elem.Score <= max.Value {
-		if limit > 0 && int64(rank) > limit {
-			break
-		}
-		result = append(result, x.elem)
-		z.deleteNode(x, update)
-		x = x.level[0].forward
-		rank++
+	var traversed int64
+	node := z.getNodeIndexByScore(min.Value)
+
+	result = make([]*Element, 0)
+	for node != nil && !max.less(node.elem.Score) && traversed < limit {
+		next := node.level[0].forward
+		result = append(result, node.elem)
+		z.delete(node.elem.Score, node.elem.Member)
+		node = next
+		traversed++
 	}
 	return
+}
+
+func (z *zskiplist) forEachInScoreBorder(min, max *ScoreBorder, offset, limit int64, desc bool, consumer func(element *Element) bool) {
+	if !z.hasInRange(min, max) {
+		return
+	}
+
+	var traversed int64
+	node := z.getNodeIndexByScore(min.Value)
+
+	for node != nil && !max.less(node.elem.Score) {
+		if traversed >= offset && traversed < (offset+limit) {
+			if !consumer(node.elem) {
+				return
+			}
+		}
+		traversed++
+
+		if desc {
+			node = node.backward
+		} else {
+			node = node.level[0].forward
+		}
+	}
+}
+
+func (z *zskiplist) count(min *ScoreBorder, max *ScoreBorder) int64 {
+	if !z.hasInRange(min, max) {
+		return 0
+	}
+
+	var count int64
+	node := z.getNodeIndexByScore(min.Value)
+
+	for node != nil && !max.less(node.elem.Score) {
+		count++
+		node = node.level[0].forward
+	}
+	return count
 }

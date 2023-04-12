@@ -111,6 +111,9 @@ func (d *ConcurrentDict) RandomDistinctKeys(limit int) []string {
 		keys = append(keys, key)
 		return true
 	})
+	rand.Shuffle(len(keys), func(i, j int) {
+		keys[i], keys[j] = keys[j], keys[i]
+	})
 	return keys
 }
 

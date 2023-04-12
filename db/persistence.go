@@ -14,7 +14,7 @@ import (
 	"os"
 )
 
-func (stdDBM *StandaloneDatabaseManager) loadRDBFile() (err error) {
+func (stdDBM *StandaloneServer) loadRDBFile() (err error) {
 	rdbFile, err := os.Open(config.Properties.RDBFilename)
 	if err != nil {
 		return fmt.Errorf("open rdb file failed " + err.Error())
@@ -29,14 +29,13 @@ func (stdDBM *StandaloneDatabaseManager) loadRDBFile() (err error) {
 	}
 	return nil
 }
-func (stdDBM *StandaloneDatabaseManager) selectDB(index int) (db *DataBaseImpl) {
+func (stdDBM *StandaloneServer) selectDB(index int) (db *DataBaseImpl) {
 	if index < 0 || index >= len(stdDBM.Dbs) {
 		panic("invalid db index")
 	}
 	return stdDBM.Dbs[index].(*DataBaseImpl)
 }
-func (stdDBM *StandaloneDatabaseManager) loadRDB(dec *core.Decoder) (err error) {
-
+func (stdDBM *StandaloneServer) loadRDB(dec *core.Decoder) (err error) {
 	return dec.Parse(func(obj parse.RedisObject) bool {
 		db := stdDBM.selectDB(obj.GetDBIndex())
 		var entity *cmi.DataEntity
@@ -93,15 +92,15 @@ func (stdDBM *StandaloneDatabaseManager) loadRDB(dec *core.Decoder) (err error) 
 		return true
 	})
 }
-func (stdDBM *StandaloneDatabaseManager) AddAof(dbIndex int, line common.CmdLine) {
+func (stdDBM *StandaloneServer) AddAof(dbIndex int, line common.CmdLine) {
 	if stdDBM.persister != nil {
 		stdDBM.persister.SaveCmd(dbIndex, line)
 	}
 }
-func (stdDBM *StandaloneDatabaseManager) bindPersister(persister *aof.Persister) {
+func (stdDBM *StandaloneServer) bindPersister(persister *aof.Persister) {
 	stdDBM.persister = persister
 	for _, db := range stdDBM.Dbs {
-		baseImpl := db.(DataBaseImpl)
+		baseImpl := db.(*DataBaseImpl)
 		baseImpl.addAof = func(cmdLine common.CmdLine) {
 			if config.Properties.AppendOnly {
 				stdDBM.persister.SaveCmd(baseImpl.index, cmdLine)
@@ -109,8 +108,8 @@ func (stdDBM *StandaloneDatabaseManager) bindPersister(persister *aof.Persister)
 		}
 	}
 }
-func MakeAuxiliaryServer() *StandaloneDatabaseManager {
-	std := &StandaloneDatabaseManager{}
+func MakeAuxiliaryServer() *StandaloneServer {
+	std := &StandaloneServer{}
 	std.Dbs = make([]any, config.Properties.Databases)
 	for i := range std.Dbs {
 		std.Dbs[i] = newBasicDB()

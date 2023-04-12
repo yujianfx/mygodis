@@ -6,6 +6,7 @@ import (
 	cm "mygodis/common"
 	"mygodis/common/commoninterface"
 	"mygodis/config"
+	"mygodis/util/cmdutil"
 	"time"
 
 	//"mygodis/db/cmd"
@@ -16,53 +17,51 @@ import (
 	"strings"
 )
 
-type StandaloneDatabaseManager struct {
+type StandaloneServer struct {
 	Dbs []any
 	//TODO add pubsub
 	//hub pubsub.Hub
 	persister *aof.Persister
 	role      uint32
 	//TODO add replication
-	//slaveStatus  *slaveStatus
-	//masterStatus *masterStatus
 	//hooks
 	insertCallBack commoninterface.KeyEventCallback
 	deleteCallBack commoninterface.KeyEventCallback
 }
 
-func (d *StandaloneDatabaseManager) ExecWithLock(connection commoninterface.Connection, args cm.CmdLine) (reply resp.Reply) {
+func (d *StandaloneServer) ExecWithLock(connection commoninterface.Connection, args cm.CmdLine) (reply resp.Reply) {
 	return d.selectDB(connection.GetDBIndex()).ExecWithLock(args)
 }
 
-func (d *StandaloneDatabaseManager) ExecMulti(connection commoninterface.Connection, watching map[string]uint32, cmdLines []cm.CmdLine) (reply resp.Reply) {
+func (d *StandaloneServer) ExecMulti(connection commoninterface.Connection, watching map[string]uint32, cmdLines []cm.CmdLine) (reply resp.Reply) {
 	return ExecMulti(d.selectDB(connection.GetDBIndex()), connection, watching, cmdLines)
 }
 
-func (d *StandaloneDatabaseManager) GetUndoLogs(dbIndex int, cmd cm.CmdLine) []cm.CmdLine {
+func (d *StandaloneServer) GetUndoLogs(dbIndex int, cmd cm.CmdLine) []cm.CmdLine {
 
 	return GetUndoLogs(d.selectDB(dbIndex), cmd)
 }
 
-func (d *StandaloneDatabaseManager) ForEach(dbIndex int, cb func(key string, data *commoninterface.DataEntity, expiration time.Time) bool) {
+func (d *StandaloneServer) ForEach(dbIndex int, cb func(key string, data *commoninterface.DataEntity, expiration time.Time) bool) {
 	d.selectDB(dbIndex).ForEach(cb)
 }
 
-func (d *StandaloneDatabaseManager) RWLocks(dbIndex int, writeKeys []string, readKeys []string) {
+func (d *StandaloneServer) RWLocks(dbIndex int, writeKeys []string, readKeys []string) {
 	db := d.selectDB(dbIndex)
 	db.RWLocks(writeKeys, readKeys)
 }
 
-func (d *StandaloneDatabaseManager) RWUnLocks(dbIndex int, writeKeys []string, readKeys []string) {
+func (d *StandaloneServer) RWUnLocks(dbIndex int, writeKeys []string, readKeys []string) {
 	db := d.selectDB(dbIndex)
 	db.RWUnLocks(writeKeys, readKeys)
 }
 
-func (d *StandaloneDatabaseManager) GetDBSize(dbIndex int) (int, int) {
+func (d *StandaloneServer) GetDBSize(dbIndex int) (int, int) {
 	db := d.selectDB(dbIndex)
 	return db.data.Len(), db.ttlMap.Len()
 }
 
-func (d *StandaloneDatabaseManager) GetEntity(dbIndex int, key string) (*commoninterface.DataEntity, bool) {
+func (d *StandaloneServer) GetEntity(dbIndex int, key string) (*commoninterface.DataEntity, bool) {
 	db := d.selectDB(dbIndex)
 	val, exists := db.data.Get(key)
 	if !exists {
@@ -72,7 +71,7 @@ func (d *StandaloneDatabaseManager) GetEntity(dbIndex int, key string) (*commoni
 	return entity, result
 }
 
-func (d *StandaloneDatabaseManager) GetExpiration(dbIndex int, key string) time.Time {
+func (d *StandaloneServer) GetExpiration(dbIndex int, key string) time.Time {
 	val, exists := d.selectDB(dbIndex).ttlMap.Get(key)
 	if !exists {
 		return time.Time{}
@@ -81,15 +80,15 @@ func (d *StandaloneDatabaseManager) GetExpiration(dbIndex int, key string) time.
 	return t
 }
 
-func (d *StandaloneDatabaseManager) SetKeyInsertedCallback(cb commoninterface.KeyEventCallback) {
+func (d *StandaloneServer) SetKeyInsertedCallback(cb commoninterface.KeyEventCallback) {
 	d.insertCallBack = cb
 }
 
-func (d *StandaloneDatabaseManager) SetKeyDeletedCallback(cb commoninterface.KeyEventCallback) {
+func (d *StandaloneServer) SetKeyDeletedCallback(cb commoninterface.KeyEventCallback) {
 	d.deleteCallBack = cb
 }
 
-func (d *StandaloneDatabaseManager) GetDbInfo(infoType cm.InfoType) []cm.DBInfo {
+func (d *StandaloneServer) GetDbInfo(infoType cm.InfoType) []cm.DBInfo {
 	infos := make([]cm.DBInfo, 0)
 	switch infoType {
 	case cm.CLIENT_INFO:
@@ -136,15 +135,17 @@ func (d *StandaloneDatabaseManager) GetDbInfo(infoType cm.InfoType) []cm.DBInfo 
 	}
 	return nil
 }
-func (d *StandaloneDatabaseManager) FlushDB(dbIndex int) commoninterface.DB {
-	return d.Dbs[dbIndex].(commoninterface.DB)
-}
-func (d *StandaloneDatabaseManager) FlushAll() {
-	for i := 0; i < config.Properties.Databases; i++ {
-		d.FlushDB(i)
+func (d *StandaloneServer) FlushAll() resp.Reply {
+	for md := range d.Dbs {
+		dbi := NewDB()
+		dbi.index = md
+		d.Dbs[md] = dbi
 	}
+	d.AddAof(0, cmdutil.ToCmdLine("flushall"))
+	return resp.MakeOkReply()
+
 }
-func (d *StandaloneDatabaseManager) Exec(connection commoninterface.Connection, cmd cm.CmdLine) (reply resp.Reply) {
+func (d *StandaloneServer) Exec(connection commoninterface.Connection, cmd cm.CmdLine) (reply resp.Reply) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Warn("server error", r)
@@ -160,7 +161,7 @@ func (d *StandaloneDatabaseManager) Exec(connection commoninterface.Connection, 
 	case "slaveof":
 		//TODO  return systemcd.SlaveOf(connection, cmd)
 	case "select":
-		return Select(connection, cmd[1:])
+		return Select(d, connection, cmd[1:])
 	case "info":
 		return Info(connection, d, cmd)
 	case "subscribe":
@@ -175,10 +176,8 @@ func (d *StandaloneDatabaseManager) Exec(connection commoninterface.Connection, 
 		//TODO  return systemcd.PUnsubscribe(connection, cmd)
 	case "pubsub":
 		//TODO  return systemcd.PubSub(connection, cmd)
-	case "flushdb":
-		return FlushDB(connection, d, cmd)
 	case "flushall":
-		return FlushAll(connection, d, cmd)
+		return d.FlushAll()
 	case "rewriteaof":
 		//TODO  return systemcd.RewriteAOF(connection, cmd)
 	case "bgrewriteaof":
@@ -198,16 +197,17 @@ func (d *StandaloneDatabaseManager) Exec(connection commoninterface.Connection, 
 	}
 	return nil
 }
-func (d *StandaloneDatabaseManager) AfterClientClose(connection commoninterface.Connection) {
-	//TODO implement me
+func (d *StandaloneServer) AfterClientClose(connection commoninterface.Connection) {
+	name := connection.Name()
+	logger.Info("client close", name)
 }
-func (d *StandaloneDatabaseManager) Close() {
-	//TODO implement me
+func (d *StandaloneServer) Close() {
+	d.persister.Close()
 
 }
-func MakeStandaloneServer() *StandaloneDatabaseManager {
+func MakeStandaloneServer() *StandaloneServer {
 	databaseCount := config.Properties.Databases
-	manager := &StandaloneDatabaseManager{
+	manager := &StandaloneServer{
 		Dbs: make([]any, databaseCount),
 	}
 	for md := range manager.Dbs {
@@ -216,7 +216,8 @@ func MakeStandaloneServer() *StandaloneDatabaseManager {
 		manager.Dbs[md] = dbi
 	}
 	//TODO 添加发布订阅
-	if config.Properties.AppendOnly {
+	appendOnly := config.Properties.AppendOnly
+	if appendOnly {
 		fsync := aof.Always
 		switch config.Properties.AppendFsync {
 		case "always":

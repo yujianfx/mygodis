@@ -2,22 +2,119 @@ package db
 
 import (
 	"mygodis/common"
+	"mygodis/common/commoninterface"
 	"mygodis/resp"
 	"reflect"
 	"testing"
 )
+
+type dataLoader struct {
+	db *DataBaseImpl
+}
+
+func newDataLoader() *dataLoader {
+	return &dataLoader{
+		db: NewDB(),
+	}
+}
+func (l *dataLoader) load(key string, score float64, member string) *dataLoader {
+	z, isNew := l.db.getOrCreateZSet(key)
+	z.Add(member, score)
+	if isNew {
+		data := new(commoninterface.DataEntity)
+		data.Data = z
+		l.db.PutEntity(key, data)
+	}
+	return l
+}
 
 func Test_execZAdd(t *testing.T) {
 	type args struct {
 		db   *DataBaseImpl
 		args common.CmdLine
 	}
+
 	tests := []struct {
 		name string
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "zadd to empty set",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("zset"),
+					[]byte("1"),
+					[]byte("b"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "zadd to non-empty set",
+			args: args{
+				db: newDataLoader().load("zset", 1, "b").db,
+				args: common.CmdLine{
+					[]byte("zset"),
+					[]byte("2"),
+					[]byte("c"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "zadd to non-empty set with same score",
+			args: args{
+				db: newDataLoader().load("zset", 1, "b").db,
+				args: common.CmdLine{
+					[]byte("zset"),
+					[]byte("1"),
+					[]byte("c"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "zadd to non-empty set with same score and member",
+			args: args{
+				db: newDataLoader().load("zset", 1, "b").db,
+				args: common.CmdLine{
+					[]byte("zset"),
+					[]byte("1"),
+					[]byte("b"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "zadd with multiple args",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("zset"),
+					[]byte("1"),
+					[]byte("b"),
+					[]byte("2"),
+					[]byte("c"),
+				},
+			},
+			want: resp.MakeIntReply(2),
+		},
+		{
+			name: "zadd with multiple args and same score and member",
+			args: args{
+				db: newDataLoader().load("zset", 1, "b").db,
+				args: common.CmdLine{
+					[]byte("zset"),
+					[]byte("2"),
+					[]byte("c"),
+					[]byte("1"),
+					[]byte("b"),
+				},
+			},
+			want: resp.MakeIntReply(2),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -38,33 +135,41 @@ func Test_execZCard(t *testing.T) {
 		args args
 		want resp.Reply
 	}{
-		// TODO: Add test cases.
+		{
+			name: "zcard with empty set",
+			args: args{
+				db: NewDB(),
+				args: common.CmdLine{
+					[]byte("zset"),
+				},
+			},
+			want: resp.MakeIntReply(0),
+		},
+		{
+			name: "zcard with set has 1 member",
+			args: args{
+				db: newDataLoader().load("zset", 1, "b").db,
+				args: common.CmdLine{
+					[]byte("zset"),
+				},
+			},
+			want: resp.MakeIntReply(1),
+		},
+		{
+			name: "zcard with set has 2 members",
+			args: args{
+				db: newDataLoader().load("zset", 1, "b").load("zset", 2, "c").db,
+				args: common.CmdLine{
+					[]byte("zset"),
+				},
+			},
+			want: resp.MakeIntReply(2),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := execZCard(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("execZCard() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_execZCount(t *testing.T) {
-	type args struct {
-		db   *DataBaseImpl
-		args common.CmdLine
-	}
-	tests := []struct {
-		name string
-		args args
-		want resp.Reply
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := execZCount(tt.args.db, tt.args.args); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("execZCount() = %v, want %v", got, tt.want)
 			}
 		})
 	}
