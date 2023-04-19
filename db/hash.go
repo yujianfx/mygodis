@@ -363,19 +363,19 @@ func undoHMSetCommands(db *DataBaseImpl, args cm.CmdLine) []cm.CmdLine {
 	return rollbackHashFields(db, string(key), fields...)
 }
 func init() {
-	RegisterCommand("hget", execHGet, readFirstKey, nil, 3, ReadOnly)
-	RegisterCommand("hgetall", execHGetAll, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("hmget", execHMGet, readFirstKey, nil, -3, ReadOnly)
-	RegisterCommand("hexists", execHExists, readFirstKey, nil, 3, ReadOnly)
-	RegisterCommand("hkeys", execHKeys, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("hlen", execHLen, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("hvals", execHVals, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("HGET", execHGet, readFirstKey, nil, 3, ReadOnly)
+	RegisterCommand("HGETALL", execHGetAll, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("HMGET", execHMGet, readFirstKey, nil, -3, ReadOnly)
+	RegisterCommand("HEXISTS", execHExists, readFirstKey, nil, 3, ReadOnly)
+	RegisterCommand("HKEYS", execHKeys, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("HLEN", execHLen, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("HVALS", execHVals, readFirstKey, nil, 2, ReadOnly)
 
-	RegisterCommand("hdel", execHDel, writeFirstKey, undoHDelCommands, -3, Write)
-	RegisterCommand("hincrby", execHIncrBy, writeFirstKey, undoHIncrByCommands, 4, Write)
-	RegisterCommand("hincrbyfloat", execHIncrByFloat, writeFirstKey, undoHIncrByFloatCommands, 4, Write)
-	RegisterCommand("hset", execHSet, writeFirstKey, undoHSetCommands, -4, Write)
-	RegisterCommand("hsetnx", execHSetNx, writeFirstKey, undoHSetNxCommands, 4, Write)
-	RegisterCommand("hmset", execHMSet, writeFirstKey, undoHMSetCommands, -4, Write)
+	RegisterCommand("HDEL", execHDel, writeFirstKey, undoHDelCommands, -3, Write)
+	RegisterCommand("HINCRBY", execHIncrBy, writeFirstKey, undoHIncrByCommands, 4, Write)
+	RegisterCommand("HINCRBYFLOAT", execHIncrByFloat, writeFirstKey, undoHIncrByFloatCommands, 4, Write)
+	RegisterCommand("HSET", execHSet, writeFirstKey, undoHSetCommands, -4, Write)
+	RegisterCommand("HSETNX", execHSetNx, writeFirstKey, undoHSetNxCommands, 4, Write)
+	RegisterCommand("HMSET", execHMSet, writeFirstKey, undoHMSetCommands, -4, Write)
 
 }

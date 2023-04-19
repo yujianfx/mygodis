@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"reflect"
 	"strconv"
+	"sync"
 )
 
 const (
@@ -20,9 +21,12 @@ const (
 type ConcurrentDict struct {
 	ht          [2]dictht // 使用两个哈希表实现渐进式rehash
 	reHashIndex int64     // 下一个要重哈希的桶的索引。-1表示没有进行重哈希
+	mu          sync.RWMutex
 }
 
 func (d *ConcurrentDict) Get(key string) (val any, exists bool) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	find := d.dictFind(key)
 	if find == nil {
 		return nil, false
@@ -31,10 +35,14 @@ func (d *ConcurrentDict) Get(key string) (val any, exists bool) {
 }
 
 func (d *ConcurrentDict) Len() int {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	return int(d.ht[0].used + d.ht[1].used)
 }
 
 func (d *ConcurrentDict) Put(key string, val any) (result int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	dictDelete := d.dictDelete(key)
 	if dictDelete {
 		d.dictAdd(key, val)
@@ -45,6 +53,8 @@ func (d *ConcurrentDict) Put(key string, val any) (result int) {
 }
 
 func (d *ConcurrentDict) PutIfAbsent(key string, val any) (result int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	find := d.dictFind(key)
 	if find == nil {
 		d.dictAdd(key, val)
@@ -54,6 +64,8 @@ func (d *ConcurrentDict) PutIfAbsent(key string, val any) (result int) {
 }
 
 func (d *ConcurrentDict) PutIfExists(key string, val any) (result int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	find := d.dictFind(key)
 	if find != nil {
 		find.value = val
@@ -63,6 +75,8 @@ func (d *ConcurrentDict) PutIfExists(key string, val any) (result int) {
 }
 
 func (d *ConcurrentDict) Remove(key string) (val any, result int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	find := d.dictFind(key)
 	if find == nil {
 		return nil, 0
@@ -72,6 +86,8 @@ func (d *ConcurrentDict) Remove(key string) (val any, result int) {
 }
 
 func (d *ConcurrentDict) ForEach(consumer Consumer) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	for _, ht := range d.ht {
 		for _, entry := range ht.table {
 			for entry != nil {
@@ -83,6 +99,8 @@ func (d *ConcurrentDict) ForEach(consumer Consumer) {
 }
 
 func (d *ConcurrentDict) Keys() []string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	keys := make([]string, 0, d.Len())
 	d.ForEach(func(key string, val any) bool {
 		keys = append(keys, key)
@@ -92,6 +110,8 @@ func (d *ConcurrentDict) Keys() []string {
 }
 
 func (d *ConcurrentDict) RandomKeys(limit int) []string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	keys := d.Keys()
 	if len(keys) <= limit {
 		return keys
@@ -103,6 +123,8 @@ func (d *ConcurrentDict) RandomKeys(limit int) []string {
 }
 
 func (d *ConcurrentDict) RandomDistinctKeys(limit int) []string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	keys := make([]string, 0, limit)
 	d.ForEach(func(key string, val any) bool {
 		if len(keys) >= limit {
@@ -118,6 +140,8 @@ func (d *ConcurrentDict) RandomDistinctKeys(limit int) []string {
 }
 
 func (d *ConcurrentDict) Clear() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.clear()
 }
 
@@ -232,7 +256,6 @@ func (d *ConcurrentDict) dictFind(key any) *dictEntry {
 	if d.reHashIndex != -1 {
 		d.dictRehash(1)
 	}
-
 	hash := dictHashFunction(key)
 	for table := 0; table <= 1; table++ {
 		ht := &d.ht[table]

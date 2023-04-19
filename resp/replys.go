@@ -19,17 +19,17 @@ type MultiBulkReply struct {
 type MultiRawReply struct {
 	replies []Reply
 }
-type StatusReply struct {
-	Status string
+type SimpleStringReply struct {
+	SimpleString string
 }
 
-func MakeStatusReply(status string) *StatusReply {
-	return &StatusReply{
-		Status: status,
+func MakeSimpleStringReply(status string) *SimpleStringReply {
+	return &SimpleStringReply{
+		SimpleString: status,
 	}
 }
-func (r *StatusReply) ToBytes() []byte {
-	return []byte("+" + r.Status + CRLF)
+func (r *SimpleStringReply) ToBytes() []byte {
+	return []byte("+" + r.SimpleString + CRLF)
 }
 
 func (m MultiRawReply) ToBytes() []byte {

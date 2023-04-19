@@ -21,12 +21,13 @@ type Command struct {
 }
 
 func GetCommand(line cm.CmdLine) (*Command, bool) {
-	c, ok := cmdContainer[string(line[0])]
+	cmdName := string(line[0])
+	c, ok := cmdContainer[strings.ToUpper(cmdName)]
 	return c, ok
 
 }
 func RegisterCommand(name string, executor ExecFunc, prepare PreFunc, rollback UndoFunc, arity int, flags int) {
-	cmdContainer[strings.ToLower(name)] = &Command{
+	cmdContainer[name] = &Command{
 		executor: executor,
 		prepare:  prepare,
 		undo:     rollback,

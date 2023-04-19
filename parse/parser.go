@@ -10,7 +10,6 @@ import (
 	"mygodis/resp"
 	"runtime/debug"
 	"strconv"
-	"strings"
 )
 
 type Payload struct {
@@ -46,7 +45,7 @@ func ParseOne(data []byte) (resp.Reply, error) {
 	ch := make(chan *Payload)
 	reader := bytes.NewReader(data)
 	go parse0(reader, ch)
-	payload := <-ch // parse0 will close the channel
+	payload := <-ch
 	if payload == nil {
 		return nil, errors.New("no protocol")
 	}
@@ -54,8 +53,8 @@ func ParseOne(data []byte) (resp.Reply, error) {
 }
 func parse0(reader io.Reader, ch chan<- *Payload) {
 	defer func() {
-		if r := recover(); r != nil {
-			logger.Warn("server error: ", r)
+		if err := recover(); err != nil {
+			logger.Warn("server error: ", err)
 			logger.Errorf("%v", debug.Stack())
 			ch <- &Payload{
 				Err: errors.New("server error"),
@@ -81,17 +80,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 		case '+':
 			s := string(line[1:])
 			ch <- &Payload{
-				Data: resp.MakeStatusReply(s),
-			}
-			if strings.HasPrefix(s, "FULLRESYNC") {
-				err = parseRDBBulkString(bufioReader, ch)
-				if err != nil {
-					ch <- &Payload{
-						Err: err,
-					}
-					close(ch)
-					return
-				}
+				Data: resp.MakeSimpleStringReply(s),
 			}
 		case '-':
 			ch <- &Payload{
@@ -112,7 +101,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 				Data: resp.MakeIntReply(val),
 			}
 		case '$':
-			err := parseBulkString(line, reader, ch)
+			err := parseBulkString(line, bufioReader, ch)
 			if err != nil {
 				ch <- &Payload{
 					Err: err,
@@ -137,7 +126,6 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 	}
 
 }
-
 func parseArray(line []byte, reader *bufio.Reader, ch chan<- *Payload) error {
 	if len(line) == 0 || line[0] != '*' {
 		return nil
@@ -187,7 +175,6 @@ func parseArray(line []byte, reader *bufio.Reader, ch chan<- *Payload) error {
 	return nil
 
 }
-
 func parseBulkString(line []byte, reader io.Reader, ch chan<- *Payload) error {
 	length, err := strconv.ParseInt(string(line[1:]), 10, 64)
 	if err != nil {
@@ -214,7 +201,6 @@ func parseBulkString(line []byte, reader io.Reader, ch chan<- *Payload) error {
 	}
 	return nil
 }
-
 func parseRDBBulkString(reader *bufio.Reader, ch chan<- *Payload) error {
 	head, err := reader.ReadBytes('\n')
 	if err != nil {

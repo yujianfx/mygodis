@@ -10,6 +10,7 @@ import (
 	"mygodis/datadriver/sortedset"
 	"mygodis/resp"
 	"mygodis/util/cmdutil"
+	"mygodis/util/match"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,6 @@ func execDelete(db *DataBaseImpl, line cm.CmdLine) resp.Reply {
 	if len(line) == 0 {
 		return resp.MakeErrReply("wrong number of arguments for 'del' command")
 	}
-
 	keys := make([]string, 0, len(line))
 	for _, key := range line {
 		if _, ok := db.GetEntity(string(key)); ok {
@@ -213,6 +213,17 @@ func execPersist(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	db.addAof(cmdutil.ToCmdLine("persist", key))
 	return resp.MakeIntReply(1)
 }
+func execKeys(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
+	pattern := string(args[0])
+	keys := make([][]byte, 0)
+	db.ForEach(func(key string, entity *commoninterface.DataEntity, expireTime time.Time) bool {
+		if match.MatchPattern(pattern, key) {
+			keys = append(keys, []byte(key))
+		}
+		return true
+	})
+	return resp.MakeMultiBulkReply(keys)
+}
 func execCopy(manage *StandaloneServer, connection commoninterface.Connection, line cm.CmdLine) resp.Reply {
 	dbIndex := connection.GetDBIndex()
 	db := manage.selectDB(dbIndex)
@@ -264,7 +275,6 @@ func execCopy(manage *StandaloneServer, connection commoninterface.Connection, l
 	return resp.MakeIntReply(1)
 }
 
-// TODO keys
 func toTTLcmd(db *DataBaseImpl, key string) *resp.MultiBulkReply {
 	val, exists := db.ttlMap.Get(key)
 
@@ -296,18 +306,18 @@ func undoExpireCommands(db *DataBaseImpl, line cm.CmdLine) []cm.CmdLine {
 	return []cm.CmdLine{toTTLcmd(db, key).Args}
 }
 func init() {
-	RegisterCommand("exists", execExists, readFirstKey, nil, -2, ReadOnly)
-	RegisterCommand("ttl", execTTL, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("pttl", execPTTL, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("type", execType, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("keys", nil, nil, nil, 3, ReadOnly) // TODO keys
-	RegisterCommand("del", execDelete, writeFirstKey, undoDeleteCommands, -2, Write)
-	RegisterCommand("expire", execExpire, writeFirstKey, undoExpireCommands, 3, Write)
-	RegisterCommand("expireat", execExpireAt, writeFirstKey, undoExpireCommands, 3, Write)
-	RegisterCommand("pexpire", execPExpire, writeFirstKey, undoExpireCommands, 3, Write)
-	RegisterCommand("pexpireat", execPExpireAt, writeFirstKey, undoExpireCommands, 3, Write)
-	RegisterCommand("persist", execPersist, writeFirstKey, nil, 2, Write)
-	RegisterCommand("rename", execRename, prepareRename, undoRenameCommands, 3, Write)
-	RegisterCommand("renamenx", execRenameNx, prepareRename, undoRenameCommands, 3, Write)
-	RegisterCommand("flushdb", execFlushDB, nil, nil, 1, Write)
+	RegisterCommand("EXISTS", execExists, readFirstKey, nil, -2, ReadOnly)
+	RegisterCommand("TTL", execTTL, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("PTTL", execPTTL, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("TYPR", execType, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("KEYS", execKeys, nil, nil, 2, ReadOnly)
+	RegisterCommand("DEL", execDelete, writeFirstKey, undoDeleteCommands, -2, Write)
+	RegisterCommand("EXPIRE", execExpire, writeFirstKey, undoExpireCommands, 3, Write)
+	RegisterCommand("EXPIREAT", execExpireAt, writeFirstKey, undoExpireCommands, 3, Write)
+	RegisterCommand("PEXPIRE", execPExpire, writeFirstKey, undoExpireCommands, 3, Write)
+	RegisterCommand("PEXPIREAT", execPExpireAt, writeFirstKey, undoExpireCommands, 3, Write)
+	RegisterCommand("PERSIST", execPersist, writeFirstKey, nil, 2, Write)
+	RegisterCommand("RENAME", execRename, prepareRename, undoRenameCommands, 3, Write)
+	RegisterCommand("RENAMENX", execRenameNx, prepareRename, undoRenameCommands, 3, Write)
+	RegisterCommand("FLUSHDB", execFlushDB, nil, nil, 1, Write)
 }

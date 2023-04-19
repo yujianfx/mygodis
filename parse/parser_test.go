@@ -32,3 +32,12 @@ func Test_parseBulkString(t *testing.T) {
 		}
 	})
 }
+
+func TestParseOne(t *testing.T) {
+	ping := ([]byte)("*1\r\n$4\r\nPING\r\n")
+	resp, err := ParseOne(ping)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log(resp)
+}

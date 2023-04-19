@@ -68,7 +68,6 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 				h.closeConnection(connection)
 				logger.Error("write error: " + err.Error())
 				return
-
 			}
 		} else {
 			num, err := connection.Write(unknownErrReplyBytes)
@@ -103,8 +102,10 @@ func MakeHandler() *Handler {
 	clusterEnable := config.Properties.ClusterEnable
 	if clusterEnable {
 		dbi = cluster.MakeCluster()
+		logger.Info("start with cluster mode")
 	} else {
 		dbi = db.MakeStandaloneServer()
+		logger.Info("start with standalone mode")
 	}
 	return &Handler{
 		db: dbi,

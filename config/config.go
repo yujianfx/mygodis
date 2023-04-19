@@ -30,6 +30,8 @@ type ServerProperties struct {
 	ClusterSeed       string   `cfg:"cluster-seed"`
 	Peers             []string `cfg:"peers"`
 	Self              string   `cfg:"self"`
+	DataCenterId      int64    `cfg:"datacenter-id"`
+	WorkerId          int64    `cfg:"worker-id"`
 }
 
 var Properties *ServerProperties
@@ -105,7 +107,12 @@ func SetupConfig(configFilename string) {
 	if err != nil {
 		panic(err)
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(file)
 	Properties = parse(file)
 }
 func (p *ServerProperties) AnnounceAddress() string {

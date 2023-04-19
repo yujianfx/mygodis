@@ -1,33 +1,80 @@
 package cluster
 
 import (
+	"fmt"
 	cm "mygodis/common"
-	"mygodis/common/commoninterface"
+	cmi "mygodis/common/commoninterface"
 	"mygodis/config"
+	"mygodis/datadriver/dict"
+	"mygodis/db"
+	"mygodis/lib/id"
 	"mygodis/resp"
 )
 
 type Cluster struct {
-	self string
+	self               string
+	nodes              dict.Dict
+	db                 *db.StandaloneServer
+	nodeConnectionPool *ConnectionPool
+	transactions       dict.Dict
+	idGenerator        *id.Snowflake
+	ch                 *ConsistentHash
+	epoch              int64
 }
 
-func (c Cluster) Exec(connection commoninterface.Connection, args cm.CmdLine) (reply resp.Reply) {
-	//TODO implement me
-	panic("implement me")
+func (c *Cluster) dumpCluster() {
+	fmt.Println()
+	fmt.Printf("###############\n")
+	fmt.Printf("self is:%s\n", c.self)
+	fmt.Printf("nodes%v\n", c.nodes.Keys())
+	serialize, _ := c.ch.Serialize()
+	fmt.Printf("ConsistentHash : %s\n", string(serialize))
 }
+func (c *Cluster) Exec(connection cmi.Connection, args cm.CmdLine) (reply resp.Reply) {
 
-func (c Cluster) AfterClientClose(connection commoninterface.Connection) {
-	//TODO implement me
-	panic("implement me")
+	cmdName := string(args[0])
+	switch cmdName {
+	case "PING":
+		return execPing(c)
+	case "CPING":
+		return execCPing()
+	}
+	// auth
+	if cmdName == "CLUSTER" {
+		return c.execCluster(connection, args[1:])
+	}
+	cmd, ok := DispatchCmd(cmdName)
+	if !ok {
+		return resp.MakeErrReply("ERR unknown command '" + cmdName + "'")
+	}
+
+	return cmd(c, connection, args)
 }
-
-func (c Cluster) Close() {
-	//TODO implement me
-	panic("implement me")
+func (c *Cluster) AfterClientClose(connection cmi.Connection) {
+	c.db.AfterClientClose(connection)
+}
+func (c *Cluster) Close() {
+	c.db.Close()
+	c.nodeConnectionPool.Close()
 }
 
 func MakeCluster() *Cluster {
-	return &Cluster{
-		self: config.Properties.Self,
+	cluster := &Cluster{
+		nodes:              dict.NewConcurrentDict(),
+		self:               config.Properties.Self,
+		db:                 db.MakeStandaloneServer(),
+		nodeConnectionPool: NewConnectionPool(),
+		transactions:       dict.NewConcurrentDict(),
+		ch:                 MakeConsistentHash(),
+		idGenerator: func() *id.Snowflake {
+			snowflake, err := id.NewSnowflake(config.Properties.DataCenterId, config.Properties.WorkerId)
+			if err != nil {
+				panic(err)
+			}
+			return snowflake
+		}(),
 	}
+	cluster.ch.AddNode(cluster.self)
+
+	return cluster
 }

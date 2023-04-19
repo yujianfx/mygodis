@@ -152,50 +152,49 @@ func (d *StandaloneServer) Exec(connection commoninterface.Connection, cmd cm.Cm
 			reply = resp.MakeErrReply("server error")
 		}
 	}()
-	cmdName := strings.ToLower(string(cmd[0]))
+	cmdName := strings.ToUpper(string(cmd[0]))
 	switch cmdName {
-	case "ping":
+	case "PING":
 		return Ping()
-	case "auth":
+	case "AUTH":
 		return Auth(connection, cmd[1:])
-	case "slaveof":
-		//TODO  return systemcd.SlaveOf(connection, cmd)
-	case "select":
+	//case "slaveof":
+	//TODO  return systemcd.SlaveOf(connection, cmd)
+	case "SELECT":
 		return Select(d, connection, cmd[1:])
-	case "info":
+	case "INFO":
 		return Info(connection, d, cmd)
-	case "subscribe":
-		//TODO  return systemcd.Subscribe(connection, cmd)
-	case "unsubscribe":
-		//TODO  return systemcd.Unsubscribe(connection, cmd)
-	case "publish":
-		//TODO  return systemcd.Publish(connection, cmd)
-	case "psubscribe":
-		//TODO  return systemcd.PSubscribe(connection, cmd)
-	case "punsubscribe":
-		//TODO  return systemcd.PUnsubscribe(connection, cmd)
-	case "pubsub":
-		//TODO  return systemcd.PubSub(connection, cmd)
+	//case "subscribe":
+	//TODO  return systemcd.Subscribe(connection, cmd)
+	//case "unsubscribe":
+	//TODO  return systemcd.Unsubscribe(connection, cmd)
+	//case "publish":
+	//TODO  return systemcd.Publish(connection, cmd)
+	//case "psubscribe":
+	//TODO  return systemcd.PSubscribe(connection, cmd)
+	//case "punsubscribe":
+	//TODO  return systemcd.PUnsubscribe(connection, cmd)
+	//case "pubsub":
+	//TODO  return systemcd.PubSub(connection, cmd)
 	case "flushall":
 		return d.FlushAll()
-	case "rewriteaof":
-		//TODO  return systemcd.RewriteAOF(connection, cmd)
-	case "bgrewriteaof":
-		//TODO  return systemcd.BgRewriteAOF(connection, cmd)
-	case "save":
-		//TODO  return systemcd.Save(connection, cmd)
-	case "bgsave":
-		//TODO  return systemcd.BgSave(connection, cmd)
-	case "copy":
-		//TODO  return systemcd.Copy(connection, cmd)
-	case "replconf":
-		//TODO  return systemcd.ReplConf(connection, cmd)
-	case "psync":
+	//case "rewriteaof":
+	//TODO  return systemcd.RewriteAOF(connection, cmd)
+	//case "bgrewriteaof":
+	//TODO  return systemcd.BgRewriteAOF(connection, cmd)
+	//case "save":
+	//TODO  return systemcd.Save(connection, cmd)
+	//case "bgsave":
+	//TODO  return systemcd.BgSave(connection, cmd)
+	//case "copy":
+	//TODO  return systemcd.Copy(connection, cmd)
+	//case "replconf":
+	//TODO  return systemcd.ReplConf(connection, cmd)
+	//case "psync":
 	//TODO  return systemcd.PSync(connection, cmd)
 	default:
 		return d.selectDB(connection.GetDBIndex()).Exec(connection, cmd)
 	}
-	return nil
 }
 func (d *StandaloneServer) AfterClientClose(connection commoninterface.Connection) {
 	name := connection.Name()

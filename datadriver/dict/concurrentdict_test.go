@@ -2,10 +2,11 @@ package dict
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 )
 
-var testCount = 96000
+var testCount = 409600
 var dict = NewConcurrentDict()
 
 func loadData() {
@@ -30,15 +31,14 @@ func TestConcurrentDict_Put(t *testing.T) {
 	for i := 0; i < testCount; i++ {
 		dict.Put(fmt.Sprintf("%d", i), i)
 	}
-
 }
 func TestConcurrentDict_Get(t *testing.T) {
 	loadData()
 	successCount := 0
-
 	t.Run("Get", func(t *testing.T) {
 		for i := 0; i < testCount; i++ {
-			if val, exists := dict.Get(fmt.Sprintf("%d", i)); exists && val == i {
+			val, exists := dict.Get(fmt.Sprintf("key%d", i))
+			if exists && val == i {
 				successCount++
 			}
 		}
@@ -119,4 +119,41 @@ func FuzzConcurrentDict_Put(f *testing.F) {
 			t.Errorf("get failed, expected %s,but got %s", string(value), val)
 		}
 	})
+}
+func BenchmarkConcurrentDict_Put(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		dict.Put(fmt.Sprintf("%d", i), i)
+	}
+}
+func TestConcurrentSafety(t *testing.T) {
+	dict := NewConcurrentDict()
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dict.Put("key", "value")
+			dict.Get("key")
+			dict.Remove("key")
+		}()
+	}
+
+	// 等待所有 goroutine 完成
+	wg.Wait()
+}
+func BenchmarkConcurrentSafety(b *testing.B) {
+	dict := NewConcurrentDict()
+	for i := 0; i < b.N; i++ {
+		var wg sync.WaitGroup
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				dict.Put("key", "value")
+				dict.Get("key")
+				dict.Remove("key")
+			}()
+		}
+		wg.Wait()
+	}
 }

@@ -474,18 +474,18 @@ func preparePopPush(args cm.CmdLine) (writeKeys []string, readKeys []string) {
 	return writeKeys, readKeys
 }
 func init() {
-	RegisterCommand("lindex", execLIndex, readFirstKey, nil, 3, ReadOnly)
-	RegisterCommand("llen", execLLen, readFirstKey, nil, 2, ReadOnly)
-	RegisterCommand("lrange", execLRange, readFirstKey, nil, 4, ReadOnly)
-	RegisterCommand("lpop", execLPop, writeFirstKey, undoLPopCommands, 2, Write)
-	RegisterCommand("lpush", execLPush, writeFirstKey, undoLPushCommands, -3, Write)
-	RegisterCommand("lpushx", execLPushX, writeFirstKey, undoLPushXCommands, 3, Write)
-	RegisterCommand("lrem", execLRem, writeFirstKey, undoLtrimCommands, 4, Write)
-	RegisterCommand("lset", execLSet, writeFirstKey, rollbackFirstKey, 4, Write)
-	RegisterCommand("ltrim", execLTrim, writeFirstKey, rollbackFirstKey, 4, Write)
-	RegisterCommand("rpop", execRPop, writeFirstKey, undoRPopCommands, 2, Write)
-	RegisterCommand("rpoplpush", execRPopLPush, preparePopPush, undoRPopLPushCommands, 3, Write)
-	RegisterCommand("rpush", execRPush, writeFirstKey, undoRPushCommands, -3, Write)
-	RegisterCommand("rpushx", execRPushX, writeFirstKey, undoRPushXCommands, -3, Write)
+	RegisterCommand("LINDEX", execLIndex, readFirstKey, nil, 3, ReadOnly)
+	RegisterCommand("LLEN", execLLen, readFirstKey, nil, 2, ReadOnly)
+	RegisterCommand("LRANGE", execLRange, readFirstKey, nil, 4, ReadOnly)
+	RegisterCommand("LPOP", execLPop, writeFirstKey, undoLPopCommands, 2, Write)
+	RegisterCommand("LPUSH", execLPush, writeFirstKey, undoLPushCommands, -3, Write)
+	RegisterCommand("LPUSHX", execLPushX, writeFirstKey, undoLPushXCommands, 3, Write)
+	RegisterCommand("LREM", execLRem, writeFirstKey, undoLtrimCommands, 4, Write)
+	RegisterCommand("LSET", execLSet, writeFirstKey, rollbackFirstKey, 4, Write)
+	RegisterCommand("LTRIM", execLTrim, writeFirstKey, rollbackFirstKey, 4, Write)
+	RegisterCommand("RPOP", execRPop, writeFirstKey, undoRPopCommands, 2, Write)
+	RegisterCommand("RPOPLPUSH", execRPopLPush, preparePopPush, undoRPopLPushCommands, 3, Write)
+	RegisterCommand("RPUSH", execRPush, writeFirstKey, undoRPushCommands, -3, Write)
+	RegisterCommand("RPUSHX", execRPushX, writeFirstKey, undoRPushXCommands, -3, Write)
 
 }

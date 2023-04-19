@@ -11,14 +11,12 @@ import (
 	logger "mygodis/log"
 	"mygodis/resp"
 	"mygodis/util/cmdutil"
+	"mygodis/util/ternaryoperator"
 	"strings"
 	"time"
 )
 
 const (
-	//dataDictSize = 1 << 16
-	//ttlDictSize  = 1 << 10
-	//lockerSize   = 1024
 	dataDictSize = 4
 	ttlDictSize  = 4
 	lockerSize   = 1024
@@ -85,22 +83,22 @@ func newBasicDB() *DataBaseImpl {
 func (dbi *DataBaseImpl) Exec(c commoninterface.Connection, cmd cm.CmdLine) (reply resp.Reply) {
 	s := strings.ToLower(string(cmd[0]))
 	switch s {
-	case "multi": //开启事务
+	case "MULTI": //开启事务
 		if len(cmd) != 1 {
 			return resp.MakeArgNumErrReply(s)
 		}
 		return StartMulti(c)
-	case "discard": //取消事务
+	case "DISCARD": //取消事务
 		if len(cmd) != 1 {
 			return resp.MakeArgNumErrReply(s)
 		}
 		return DiscardMulti(c)
-	case "exec": //执行事务
+	case "EXEC": //执行事务
 		if len(cmd) != 1 {
 			return resp.MakeArgNumErrReply(s)
 		}
 		return execMulti(dbi, c)
-	case "watch": //监视key
+	case "WATCH": //监视key
 		if len(cmd) < 2 {
 			return resp.MakeArgNumErrReply(s)
 		}
@@ -230,7 +228,8 @@ func (dbi *DataBaseImpl) ForEach(f func(key string, entity *commoninterface.Data
 	dbi.data.ForEach(func(key string, val any) bool {
 		entity := val.(*commoninterface.DataEntity)
 		expireTime, _ := dbi.ttlMap.Get(key)
-		return f(key, entity, expireTime.(time.Time))
+		t, ok := expireTime.(time.Time)
+		return f(key, entity, ternaryoperator.Which(ok, t, time.Time{}))
 	})
 }
 func (dbi *DataBaseImpl) RWLocks(writeKeys []string, readKeys []string) {
