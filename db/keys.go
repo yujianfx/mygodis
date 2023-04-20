@@ -274,7 +274,6 @@ func execCopy(manage *StandaloneServer, connection commoninterface.Connection, l
 	manage.AddAof(connection.GetDBIndex(), cmdutil.ToCmdLine("copy", src, dest, "db", strconv.Itoa(dbIndex)))
 	return resp.MakeIntReply(1)
 }
-
 func toTTLcmd(db *DataBaseImpl, key string) *resp.MultiBulkReply {
 	val, exists := db.ttlMap.Get(key)
 

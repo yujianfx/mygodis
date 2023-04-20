@@ -270,7 +270,7 @@ func execRPopLPush(db *DataBaseImpl, args cm.CmdLine) resp.Reply {
 	if isCreated {
 		db.PutEntity(dstKey, &commoninterface.DataEntity{Data: dstList})
 	}
-	db.addAof(cmdutil.ToCmdLineWithBytes("rpoplpush", args...))
+	db.addAof(cmdutil.ToCmdLineWithBytes("RPOPLPUSH", args...))
 	return resp.MakeBulkReply(val.([]byte))
 }
 func execRPush(db *DataBaseImpl, args cm.CmdLine) resp.Reply {

@@ -31,7 +31,6 @@ func (c *Cluster) dumpCluster() {
 	fmt.Printf("ConsistentHash : %s\n", string(serialize))
 }
 func (c *Cluster) Exec(connection cmi.Connection, args cm.CmdLine) (reply resp.Reply) {
-
 	cmdName := string(args[0])
 	switch cmdName {
 	case "PING":

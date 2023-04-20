@@ -1,15 +1,12 @@
 package cluster
 
 import (
-	"fmt"
 	cm "mygodis/common"
 	cmi "mygodis/common/commoninterface"
 	"mygodis/resp"
 )
 
 type CmdFunc func(cluster *Cluster, connection cmi.Connection, cmdLine cm.CmdLine) resp.Reply
-
-var cmdContainer = make(map[string]CmdFunc)
 
 func RegisterCmd(name string, cmd CmdFunc) {
 	cmdContainer[name] = cmd
@@ -21,14 +18,24 @@ func DispatchCmd(name string) (CmdFunc, bool) {
 
 var (
 	defaultFunc = func(cluster *Cluster, connection cmi.Connection, cmdLine cm.CmdLine) resp.Reply {
+		if isMultiKeyCmd(cmdLine) {
+			name := string(cmdLine[0])
+			if IsSupportMulti(name) {
+				switch name {
+				case "MSET", "MSETNX":
+					return execMSet0(cluster, connection, cmdLine)
+				case "MGET":
+					return execMGet(cluster, connection, cmdLine)
+				case "DEL":
+					return execDel(cluster, connection, cmdLine)
+				}
+			}
+			return resp.MakeErrReply("not support multi key command " + name)
+		}
 		key := cmdLine[1]
 		node := cluster.ch.GetNode(key)
-		fmt.Println("pickNode is: ", node, "and self is: ", cluster.self)
-		serialize, _ := cluster.ch.Serialize()
-		fmt.Println("ch struct is", string(serialize))
 		if node == cluster.self {
 			reply := cluster.db.Exec(connection, cmdLine)
-			fmt.Println("reply is ", string(reply.ToBytes()))
 			return reply
 		}
 		client := cluster.nodeConnectionPool.GetConnection(node)
@@ -41,15 +48,16 @@ var (
 )
 
 func init() {
+	RegisterSupportMultiKey("MSET", "METNX", "MGET", "DEL")
 	RegisterCmd("SET", defaultFunc)
 	RegisterCmd("GETEX", defaultFunc)
 	RegisterCmd("GET", defaultFunc)
 	RegisterCmd("SETNX", defaultFunc)
 	RegisterCmd("SETEX", defaultFunc)
 	RegisterCmd("PSETEX", defaultFunc)
-	//RegisterCmd("MSET", defaultFunc)
-	//RegisterCmd("MGET", defaultFunc)
-	//RegisterCmd("MSETNX", defaultFunc)
+	RegisterCmd("MSET", defaultFunc)
+	RegisterCmd("MGET", defaultFunc)
+	RegisterCmd("MSETNX", defaultFunc)
 	RegisterCmd("GETSET", defaultFunc)
 	RegisterCmd("GETDEL", defaultFunc)
 	RegisterCmd("INCR", defaultFunc)
@@ -93,15 +101,15 @@ func init() {
 	RegisterCmd("HVALS", defaultFunc)
 	RegisterCmd("SADD", defaultFunc)
 	RegisterCmd("SCARD", defaultFunc)
-	//RegisterCmd("SDIFF", defaultFunc)
-	//RegisterCmd("SDIFFSTORE", defaultFunc)
-	//RegisterCmd("SINTER", defaultFunc)
-	//RegisterCmd("SINTERSTORE", defaultFunc)
-	//RegisterCmd("SISMEMBER", defaultFunc)
-	//RegisterCmd("SMOVE", defaultFunc)
-	//RegisterCmd("SPOP", defaultFunc)
-	//RegisterCmd("SRANDMEMBER", defaultFunc)
-	//RegisterCmd("SREM", defaultFunc)
-	//RegisterCmd("SUNION", defaultFunc)
-	//RegisterCmd("SUNIOMSTORE", defaultFunc)
+	RegisterCmd("SDIFF", defaultFunc)
+	RegisterCmd("SDIFFSTORE", defaultFunc)
+	RegisterCmd("SINTER", defaultFunc)
+	RegisterCmd("SINTERSTORE", defaultFunc)
+	RegisterCmd("SISMEMBER", defaultFunc)
+	RegisterCmd("SMOVE", defaultFunc)
+	RegisterCmd("SPOP", defaultFunc)
+	RegisterCmd("SRANDMEMBER", defaultFunc)
+	RegisterCmd("SREM", defaultFunc)
+	RegisterCmd("SUNION", defaultFunc)
+	RegisterCmd("SUNIOMSTORE", defaultFunc)
 }
