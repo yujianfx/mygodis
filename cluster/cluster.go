@@ -9,6 +9,7 @@ import (
 	"mygodis/db"
 	"mygodis/lib/id"
 	"mygodis/resp"
+	"strings"
 )
 
 type Cluster struct {
@@ -22,6 +23,14 @@ type Cluster struct {
 	epoch              int64
 }
 
+func (c *Cluster) AddClient(connection cmi.Connection) {
+	c.db.AddClient(connection)
+}
+
+func (c *Cluster) RemoveClient(connection cmi.Connection) {
+	c.db.RemoveClient(connection)
+}
+
 func (c *Cluster) dumpCluster() {
 	fmt.Println()
 	fmt.Printf("###############\n")
@@ -31,14 +40,15 @@ func (c *Cluster) dumpCluster() {
 	fmt.Printf("ConsistentHash : %s\n", string(serialize))
 }
 func (c *Cluster) Exec(connection cmi.Connection, args cm.CmdLine) (reply resp.Reply) {
-	cmdName := string(args[0])
+	cmdName := strings.ToUpper(string(args[0]))
 	switch cmdName {
 	case "PING":
 		return execPing(c)
 	case "CPING":
 		return execCPing()
+	case "INFO":
+		return execInfo(c, args[1:])
 	}
-	// auth
 	if cmdName == "CLUSTER" {
 		return c.execCluster(connection, args[1:])
 	}
@@ -48,6 +58,32 @@ func (c *Cluster) Exec(connection cmi.Connection, args cm.CmdLine) (reply resp.R
 	}
 
 	return cmd(c, connection, args)
+}
+
+func execInfo(c *Cluster, cmd cm.CmdLine) resp.Reply {
+	if len(cmd) == 1 {
+		param := string(cmd[0])
+		switch param {
+		case "server":
+			return resp.MakeMultiBulkReply(db.ServerInfo(c.db))
+		case "client":
+			return resp.MakeMultiBulkReply(db.ClientInfo(c.db))
+		case "cluster":
+			return resp.MakeMultiBulkReply([][]byte{
+				[]byte("# Cluster"),
+				[]byte(fmt.Sprintf("cluster_enabled: %v", config.Properties.ClusterEnable)),
+				[]byte(fmt.Sprintf("cluster_node_count: %d", c.nodes.Len())),
+				[]byte(fmt.Sprintf("cluster_nodes: %v", c.nodes.Keys())),
+			})
+		case "memory":
+			return resp.MakeMultiBulkReply(db.MemoryInfo(c.db))
+		case "persistence":
+			return resp.MakeMultiBulkReply(db.PersistenceInfo(c.db))
+		case "cpu":
+			return resp.MakeMultiBulkReply(db.CpuInfo(c.db))
+		}
+	}
+	return db.AllInfo(c.db)
 }
 func (c *Cluster) AfterClientClose(connection cmi.Connection) {
 	c.db.AfterClientClose(connection)

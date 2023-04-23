@@ -154,38 +154,37 @@ func (c *Cluster) execCluster(connection cmi.Connection, args cm.CmdLine) (reply
 		reply = c.execCFlushDB()
 	case "NODES":
 		reply = c.execNodes()
-	case "CNODES":
-		reply = c.execCNodes()
+		//case "CNODES":
+		//	reply = c.execCNodes()
 	}
-	c.dumpCluster()
+	//c.dumpCluster()
 	return
 }
 func (c *Cluster) execNodes() resp.Reply {
 	nodes := c.nodes.Keys()
-	results, errs := c.broadcast(cmdutil.ToCmdLineWithName("CLUSTER", "CNODES"))
-	if errs != nil || len(errs) != 0 {
-		return resp.MakeErrReply("cluster error")
-	}
-	resultNodes := make([][]string, 0, len(nodes))
-	i := 0
-	for _, reply := range results {
-		itemNodes, ok := reply.(*resp.MultiBulkReply)
-		if ok {
-			resultNodes[i] = com.BytesToString(itemNodes.Args)
-		}
-	}
-	resultNodes = append(resultNodes, nodes)
-	if com.AreSlicesEqual(resultNodes...) {
-		return resp.MakeMultiBulkReply(com.StringsToBytes(nodes))
-	}
-	return resp.MakeErrReply("cluster error")
+	//results, errs := c.broadcast(cmdutil.ToCmdLineWithName("CLUSTER", "CNODES"))
+	//if errs != nil || len(errs) != 0 {
+	//	return resp.MakeErrReply("cluster error")
+	//}
+	//resultNodes := make([][]string, len(nodes))
+	//for _, reply := range results {
+	//	itemNodes, ok := reply.(*resp.MultiBulkReply)
+	//	if ok {
+	//		resultNodes = append(resultNodes, com.BytesToString(itemNodes.Args))
+	//	}
+	//}
+	//resultNodes = append(resultNodes, nodes)
+	//if com.AreSlicesEqual(resultNodes...) {
+	return resp.MakeMultiBulkReply(com.StringsToBytes(nodes))
+	//}
+	//return resp.MakeErrReply("cluster error")
 }
 func (c *Cluster) execCNodes() resp.Reply {
-	keys := c.nodes.Keys()
-	result := com.StringsToBytes(keys)
+	nodes := c.nodes.Keys()
+	nodes = append(nodes, c.self)
+	result := com.StringsToBytes(nodes)
 	return resp.MakeMultiBulkReply(result)
 }
-
 func (c *Cluster) execMeet(args cm.CmdLine) resp.Reply {
 	targetNode := string(args[0])
 	connectionPool := c.nodeConnectionPool
@@ -201,6 +200,7 @@ func (c *Cluster) execMeet(args cm.CmdLine) resp.Reply {
 		clusterNodes := ch.GetNodes()
 		c.nodeConnectionPool.AddConnection(clusterNodes...)
 		c.ch = ch
+		c.nodes.Put(targetNode, struct{}{})
 		return resp.MakeOkReply()
 	}
 	return resp.MakeErrReply("meet failed")

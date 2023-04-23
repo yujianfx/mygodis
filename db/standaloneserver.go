@@ -7,6 +7,7 @@ import (
 	"mygodis/common/commoninterface"
 	"mygodis/config"
 	"mygodis/util/cmdutil"
+	"sync"
 	"time"
 
 	//"mygodis/db/cmd"
@@ -18,7 +19,8 @@ import (
 )
 
 type StandaloneServer struct {
-	Dbs []any
+	Dbs        []any
+	activeConn *sync.Map
 	//TODO add pubsub
 	//hub pubsub.Hub
 	persister *aof.Persister
@@ -29,14 +31,18 @@ type StandaloneServer struct {
 	deleteCallBack commoninterface.KeyEventCallback
 }
 
+func (d *StandaloneServer) AddClient(connection commoninterface.Connection) {
+	d.activeConn.Store(connection, nil)
+}
+func (d *StandaloneServer) RemoveClient(connection commoninterface.Connection) {
+	d.activeConn.Delete(connection)
+}
 func (d *StandaloneServer) ExecWithLock(connection commoninterface.Connection, args cm.CmdLine) (reply resp.Reply) {
 	return d.selectDB(connection.GetDBIndex()).ExecWithLock(args)
 }
-
 func (d *StandaloneServer) ExecMulti(connection commoninterface.Connection, watching map[string]uint32, cmdLines []cm.CmdLine) (reply resp.Reply) {
 	return ExecMulti(d.selectDB(connection.GetDBIndex()), connection, watching, cmdLines)
 }
-
 func (d *StandaloneServer) GetUndoLogs(dbIndex int, cmd cm.CmdLine) []cm.CmdLine {
 
 	return GetUndoLogs(d.selectDB(dbIndex), cmd)
@@ -207,7 +213,8 @@ func (d *StandaloneServer) Close() {
 func MakeStandaloneServer() *StandaloneServer {
 	databaseCount := config.Properties.Databases
 	manager := &StandaloneServer{
-		Dbs: make([]any, databaseCount),
+		Dbs:        make([]any, databaseCount),
+		activeConn: new(sync.Map),
 	}
 	for md := range manager.Dbs {
 		dbi := NewDB()

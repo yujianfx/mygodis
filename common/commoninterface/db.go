@@ -21,6 +21,8 @@ type DB interface {
 	Exec(connection Connection, args cm.CmdLine) (reply resp.Reply)
 	AfterClientClose(connection Connection)
 	Close()
+	AddClient(connection Connection)
+	RemoveClient(connection Connection)
 }
 type StandaloneDBEngine interface {
 	DB

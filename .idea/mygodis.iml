@@ -5,5 +5,13 @@
     <content url="file://$MODULE_DIR$" />
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="library" name="xterm" level="application" />
+    <orderEntry type="library" name="echarts" level="application" />
+    <orderEntry type="library" name="element-ui" level="application" />
+    <orderEntry type="library" name="vue" level="application" />
+    <orderEntry type="library" name="echarts" level="application" />
+    <orderEntry type="library" name="vue" level="application" />
+    <orderEntry type="library" name="element-ui" level="application" />
+    <orderEntry type="library" name="xterm-addon-fit" level="application" />
   </component>
 </module>

@@ -338,3 +338,11 @@ func (persister *Persister) DoRewriteAof(rewriteContext *RewriteContext) error {
 	}
 	return nil
 }
+
+func (persister *Persister) AofSize() int64 {
+	stat, err := persister.aofFile.Stat()
+	if err != nil {
+		return -1
+	}
+	return stat.Size()
+}

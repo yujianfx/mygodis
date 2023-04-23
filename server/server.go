@@ -7,6 +7,7 @@ import (
 	"mygodis/cluster"
 	"mygodis/common/commoninterface"
 	"mygodis/config"
+	"mygodis/dashboard"
 	"mygodis/db"
 	logger "mygodis/log"
 	"mygodis/parse"
@@ -22,9 +23,9 @@ var (
 )
 
 type Handler struct {
-	activeConn sync.Map // *client -> placeholder
+	activeConn *sync.Map
 	db         commoninterface.DB
-	closing    atomic.Bool // refusing new client and new request
+	closing    atomic.Bool
 }
 
 func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
@@ -34,6 +35,7 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 	}
 	connection := clientc.NewConn(conn)
 	h.activeConn.Store(connection, nil)
+	h.db.AddClient(connection)
 	payloadCh := parse.Parse(conn)
 	for payload := range payloadCh {
 		if payload.Err != nil {
@@ -92,23 +94,36 @@ func (h *Handler) Close() error {
 }
 
 func (h *Handler) closeConnection(connection commoninterface.Connection) {
-	connection.Close()
+	err := connection.Close()
+	if err != nil {
+		return
+	}
+	h.db.RemoveClient(connection)
 	h.db.AfterClientClose(connection)
 	h.activeConn.Delete(connection)
+}
+func (h *Handler) Clients() *sync.Map {
+	return h.activeConn
 }
 
 func MakeHandler() *Handler {
 	var dbi commoninterface.DB
 	clusterEnable := config.Properties.ClusterEnable
+
 	if clusterEnable {
 		dbi = cluster.MakeCluster()
 		logger.Info("start with cluster mode")
 	} else {
 		dbi = db.MakeStandaloneServer()
+		go initDashBoard()
 		logger.Info("start with standalone mode")
 	}
 	return &Handler{
-		db: dbi,
+		db:         dbi,
+		activeConn: new(sync.Map),
 	}
 
+}
+func initDashBoard() {
+	dashboard.DefaultDashboard.Start()
 }

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <script src="https://unpkg.com/vue@2.6.14"></script>
+    <script src="https://unpkg.com/element-ui@2.15.7/lib/index.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.2.2/echarts.min.js"></script>
+    <style type="text/css">
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f2f5;
+            color: #606266;
+            margin: 0;
+            padding: 0;
+        }
+
+        #app {
+            padding: 20px;
+        }
+
+        .el-row {
+            margin-bottom: 20px;
+        }
+
+        .el-col {
+            padding: 0 10px;
+        }
+
+        .el-card {
+            border-radius: 8px;
+            box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .el-header {
+            background-color: #409eff;
+            color: #fff;
+            padding: 10px 20px;
+        }
+
+        h3 {
+            margin: 0;
+            font-weight: normal;
+            text-align: center;
+        }
+
+        p {
+            margin: 0;
+            padding: 10px 0;
+        }
+
+        [ref="chart"] {
+            margin: 20px auto;
+            border: 1px solid #dcdfe6;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <el-row style="width: 800px; height: 300px;">
+        <el-col :span="12">
+            <el-card>
+                <el-header>
+                    <h3>处理器</h3>
+                </el-header>
+                <el-row>
+                    <el-col :span="12">
+                        <p>型号：[[ cpuInfo.modelName ]]</p>
+                        <p>核心数：[[ cpuInfo.cores ]]</p>
+                    </el-col>
+                    <el-col :span="12">
+                        <p>频率：[[ cpuInfo.mhz ]] MHz</p>
+                        <p>供应商：[[ cpuInfo.vendorID ]]</p>
+                    </el-col>
+                </el-row>
+            </el-card>
+        </el-col>
+        <el-col :span="12">
+            <el-card>
+                <el-header>
+                    <h3>内存</h3>
+                </el-header>
+                <el-row>
+                    <el-col :span="12">
+                        <p>已使用：[[ memoryInfo.used ]] 字节</p>
+                        <p>空闲：[[ memoryInfo.free ]] 字节</p>
+                    </el-col>
+                    <el-col :span="12">
+                        <p>总计：[[ memoryInfo.total ]] 字节</p>
+                        <p>使用率：[[ memoryInfo.used_percent ]] %</p>
+                    </el-col>
+                </el-row>
+            </el-card>
+        </el-col>
+    </el-row>
+    <div ref="chart" style="width: 800px; height: 400px; margin-top: 20px;"></div>
+</div>
+
+<script>
+    new Vue({
+        el: "#app",
+        delimiters: ["[[", "]]"],
+        data: {
+            chart: null,
+            chartOptions: {
+                tooltip: {
+                    trigger: "axis",
+                },
+                legend: {
+                    data: ["CPU 使用率", "内存 使用率"],
+                },
+                xAxis: {
+                    type: "category",
+                    data: [],
+                },
+                yAxis: {
+                    type: "value",
+                    axisLabel: {
+                        formatter: "{value} %",
+                    },
+                },
+                series: [
+                    {
+                        name: "CPU 使用率",
+                        type: "line",
+                        data: [],
+                    },
+                    {
+                        name: "内存 使用率",
+                        type: "line",
+                        data: [],
+                    },
+                ],
+            },
+            cpuInfo: {
+                modelName: "",
+                cores: 0,
+                mhz: 0,
+                vendorID: "",
+            },
+            memoryInfo: {
+                active: 0,
+                buffers: 0,
+                cached: 0,
+                free: 0,
+                inactive: 0,
+                total: 0,
+                used: 0,
+                used_percent: 0,
+            },
+        },
+        mounted() {
+            this.chart = echarts.init(this.$refs.chart);
+            this.chart.setOption(this.chartOptions);
+            this.startPolling();
+            this.fetchStaticInfo();
+        },
+        methods: {
+            fetchData() {
+                fetch('/api/cpu-memory')
+                    .then(response => response.json())
+                    .then(data => {
+                        // 将获取到的数据添加到图表中
+                        this.chartOptions.xAxis.data.push(data.timestamp);
+                        this.chartOptions.series[0].data.push(data.cpuPercent);
+                        this.chartOptions.series[1].data.push(data.memPercent);
+
+                        this.chart.setOption(this.chartOptions);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching data:', error);
+                    });
+                fetch('/mem')
+                    .then(response => response.json())
+                    .then(data => {
+                        // 将获取到的数据存储到 memoryInfo 属性中
+                        this.memoryInfo.active = data.active;
+                        this.memoryInfo.buffers = data.buffers;
+                        this.memoryInfo.cached = data.cached;
+                        this.memoryInfo.free = data.free;
+                        this.memoryInfo.inactive = data.inactive;
+                        this.memoryInfo.total = data.total;
+                        this.memoryInfo.used = data.used;
+                        this.memoryInfo.used_percent = data.used_percent;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching memory info:', error);
+                    });
+            },
+            startPolling() {
+                setInterval(() => {
+                    this.fetchData();
+                }, 2000); // 每隔 5 秒钟获取新数据
+            },
+            fetchStaticInfo() {
+                fetch('/cpu')
+                    .then(response => response.json())
+                    .then(data => {
+                        // 将获取到的数据存储到 cpuInfo 属性中
+                        this.cpuInfo.modelName = data.cpu0_modelName;
+                        this.cpuInfo.cores = data.cpu0_cores;
+                        this.cpuInfo.mhz = data.cpu0_mhz;
+                        this.cpuInfo.vendorID = data.cpu0_vendorID;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching static info:', error);
+                    });
+                fetch('/mem')
+                    .then(response => response.json())
+                    .then(data => {
+                        // 将获取到的数据存储到 memoryInfo 属性中
+                        this.memoryInfo.active = data.active;
+                        this.memoryInfo.buffers = data.buffers;
+                        this.memoryInfo.cached = data.cached;
+                        this.memoryInfo.free = data.free;
+                        this.memoryInfo.inactive = data.inactive;
+                        this.memoryInfo.total = data.total;
+                        this.memoryInfo.used = data.used;
+                        this.memoryInfo.used_percent = data.used_percent;
+                    })
+                    .catch(error => {
+                        console.error('Error fetching memory info:', error);
+                    });
+            },
+        },
+    });
+</script>
+</body>
+</html>

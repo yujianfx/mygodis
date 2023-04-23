@@ -40,6 +40,7 @@ func execKeys(cluster *Cluster, connection cmi.Connection, cmdLine cm.CmdLine) r
 			keys = append(keys, bulkReply.Args...)
 		}
 	}
+
 	return ternaryoperator.Which(len(keys) == 0, resp.MakeMultiBulkReply([][]byte{}), resp.MakeMultiBulkReply(keys))
 }
 func execCKeys(cluster *Cluster, connection cmi.Connection, cmdLine cm.CmdLine) resp.Reply {
@@ -185,7 +186,7 @@ func isMultiKeyCmd(cmdLine cm.CmdLine) bool {
 	case "RPOPLPUSH", "SMOVE", "SDIFF", "SINTER", "SUNION", "SUNIONSTORE", "SDIFFSTORE", "SINTERSTORE", "ZINTERSTORE", "ZUNIONSTORE", "ZINTER", "ZUNION":
 		return true
 	}
-	return true
+	return false
 }
 func init() {
 

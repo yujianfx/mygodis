@@ -38,6 +38,7 @@ func main() {
 		Address: addr,
 	}
 	handler := server.MakeHandler()
+
 	err := tcp.ListenAndServeWithSignal(&tcpConfig, handler)
 	if err != nil {
 		logger.Error(err)

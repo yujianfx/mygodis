@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"context"
+	"mygodis/common/commoninterface"
 	logger "mygodis/log"
 	"net"
 	"os"
@@ -17,7 +18,7 @@ type Config struct {
 	Timeout    time.Duration `yaml:"timeout"`
 }
 
-func ListenAndServeWithSignal(config *Config, handler Handler) error {
+func ListenAndServeWithSignal(config *Config, handler commoninterface.Handler) error {
 	closeC := make(chan struct{})
 	sigC := make(chan os.Signal)
 	signal.Notify(sigC, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)
@@ -36,7 +37,7 @@ func ListenAndServeWithSignal(config *Config, handler Handler) error {
 	listenAndServe(listener, handler, closeC)
 	return nil
 }
-func listenAndServe(listener net.Listener, handler Handler, closeC <-chan struct{}) {
+func listenAndServe(listener net.Listener, handler commoninterface.Handler, closeC <-chan struct{}) {
 	errorC := make(chan error)
 	defer func() {
 		close(errorC)
